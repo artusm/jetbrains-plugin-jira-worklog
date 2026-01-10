@@ -20,7 +20,7 @@ class BranchChangeListener : GitRepositoryChangeListener {
         private const val CLEANUP_INTERVAL = 10
     }
 
-    private var lastBranchName: String? = null
+    private val lastBranchByRepo = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     override fun repositoryChanged(@NotNull repository: GitRepository) {
         val project: Project = repository.project
@@ -29,13 +29,15 @@ class BranchChangeListener : GitRepositoryChangeListener {
         }
 
         val branchName = GitUtils.getBranchNameOrRev(repository)
+        val repoPath = repository.root.path
+        val lastBranchName = lastBranchByRepo[repoPath]
         
         // Check if branch actually changed
         if (lastBranchName != null && lastBranchName != branchName) {
             onBranchChanged(project, repository, branchName)
         }
         
-        lastBranchName = branchName
+        lastBranchByRepo[repoPath] = branchName
     }
 
     private fun onBranchChanged(project: Project, repository: GitRepository, newBranchName: String?) {
