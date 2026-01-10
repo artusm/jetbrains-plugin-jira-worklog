@@ -21,12 +21,8 @@ class WindowFocusListener : ApplicationActivationListener, ProjectManagerListene
         
         // Handle window focus loss auto-pause
         if (settings.isPauseOnFocusLoss()) {
-            val projectManager = ProjectManager.getInstance()
-            projectManager.openProjects.forEach { project ->
-                if (!project.isDisposed) {
-                    val timerService = project.getService(JiraWorklogTimerService::class.java)
-                    timerService?.autoPauseByFocus()
-                }
+            forEachOpenProject { timerService ->
+                timerService.autoPauseByFocus()
             }
         }
     }
@@ -53,12 +49,8 @@ class WindowFocusListener : ApplicationActivationListener, ProjectManagerListene
         
         // Handle window focus gain auto-resume
         if (settings.isPauseOnFocusLoss()) {
-            val projectManager = ProjectManager.getInstance()
-            projectManager.openProjects.forEach { project ->
-                if (!project.isDisposed) {
-                    val timerService = project.getService(JiraWorklogTimerService::class.java)
-                    timerService?.autoResumeFromFocus()
-                }
+            forEachOpenProject { timerService ->
+                timerService.autoResumeFromFocus()
             }
         }
     }
@@ -67,6 +59,19 @@ class WindowFocusListener : ApplicationActivationListener, ProjectManagerListene
         // Clear tracking if the closed project was the last active one
         if (lastActiveProject == project) {
             lastActiveProject = null
+        }
+    }
+    
+    /**
+     * Helper function to execute an action on all open projects' timer services.
+     */
+    private fun forEachOpenProject(action: (JiraWorklogTimerService) -> Unit) {
+        val projectManager = ProjectManager.getInstance()
+        projectManager.openProjects.forEach { project ->
+            if (!project.isDisposed) {
+                val timerService = project.getService(JiraWorklogTimerService::class.java)
+                timerService?.let(action)
+            }
         }
     }
 }

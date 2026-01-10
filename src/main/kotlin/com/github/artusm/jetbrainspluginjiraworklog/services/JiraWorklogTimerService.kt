@@ -216,12 +216,7 @@ class JiraWorklogTimerService(private val project: Project) {
      * Only pauses if currently running.
      */
     fun autoPauseByFocus() {
-        synchronized(this) {
-            if (persistentState.getStatus() == TimeTrackingStatus.RUNNING) {
-                persistentState.setAutoPausedByFocus(true)
-                setStatus(TimeTrackingStatus.IDLE)
-            }
-        }
+        autoPause { persistentState.setAutoPausedByFocus(true) }
     }
     
     /**
@@ -243,9 +238,17 @@ class JiraWorklogTimerService(private val project: Project) {
      * Only pauses if currently running.
      */
     fun autoPauseByProjectSwitch() {
+        autoPause { persistentState.setAutoPausedByProjectSwitch(true) }
+    }
+    
+    /**
+     * Common auto-pause logic.
+     * Only pauses if timer is currently running.
+     */
+    private fun autoPause(setFlag: () -> Unit) {
         synchronized(this) {
             if (persistentState.getStatus() == TimeTrackingStatus.RUNNING) {
-                persistentState.setAutoPausedByProjectSwitch(true)
+                setFlag()
                 setStatus(TimeTrackingStatus.IDLE)
             }
         }
@@ -257,8 +260,9 @@ class JiraWorklogTimerService(private val project: Project) {
     fun reset() {
         synchronized(this) {
             persistentState.reset()
-            widget?.repaint()
+            persistentState.clearAutoPauseFlags()
         }
+        widget?.repaint()
     }
     
     /**

@@ -84,5 +84,6 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
         state.totalTimeMs = 0L
         state.status = TimeTrackingStatus.STOPPED.name
         state.lastUpdateTimestamp = 0L
+        clearAutoPauseFlags() // Clear auto-pause flags on reset
     }
 }
