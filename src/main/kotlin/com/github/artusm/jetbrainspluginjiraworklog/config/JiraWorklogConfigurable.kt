@@ -13,7 +13,7 @@ import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
-import com.intellij.ui.components.labels.LinkLabel
+import com.intellij.ui.components.BrowserLink
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import kotlinx.coroutines.runBlocking
@@ -138,9 +138,7 @@ class JiraWorklogConfigurable : Configurable {
         add(JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
             alignmentX = Component.LEFT_ALIGNMENT
             isOpaque = false
-            add(LinkLabel.create(MyBundle.message("settings.jira.token.link")) {
-                BrowserUtil.browse("https://id.atlassian.com/manage-profile/security/api-tokens")
-            }.apply { icon = AllIcons.General.Web })
+            add(BrowserLink(AllIcons.General.Web, MyBundle.message("settings.jira.token.link"), null, "https://id.atlassian.com/manage-profile/security/api-tokens"))
         })
         add(Box.createVerticalStrut(12))
         
