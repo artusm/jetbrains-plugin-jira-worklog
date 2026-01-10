@@ -1,9 +1,11 @@
 package com.github.artusm.jetbrainspluginjiraworklog.ui
 
 import com.github.artusm.jetbrainspluginjiraworklog.data.JiraWorklogRepository
+import com.github.artusm.jetbrainspluginjiraworklog.data.WorklogRepository
 import com.github.artusm.jetbrainspluginjiraworklog.git.GitUtils
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssue
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
+import com.github.artusm.jetbrainspluginjiraworklog.services.TimerService
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import git4idea.repo.GitRepositoryManager
@@ -17,8 +19,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
 
 class CommitWorklogViewModel(
-    private val repository: JiraWorklogRepository,
-    private val timerService: JiraWorklogTimerService,
+    private val repository: WorklogRepository,
+    private val timerService: TimerService,
     private val branchProvider: () -> String?
 ) {
     // Secondary constructor for convenience/production use

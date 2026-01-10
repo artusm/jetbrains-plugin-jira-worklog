@@ -1,24 +1,22 @@
 package com.github.artusm.jetbrainspluginjiraworklog.ui
 
-import com.github.artusm.jetbrainspluginjiraworklog.data.JiraWorklogRepository
+import com.github.artusm.jetbrainspluginjiraworklog.data.WorklogRepository
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssue
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraSearchResult
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraWorklogResponse
-import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
+import com.github.artusm.jetbrainspluginjiraworklog.model.TimeTrackingStatus
+import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState
+import com.github.artusm.jetbrainspluginjiraworklog.services.TimerService
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 class CommitWorklogViewModelTest {
 
     private lateinit var viewModel: CommitWorklogViewModel
-    // private lateinit var repository: JiraWorklogRepository // Not strictly needed if only used in setup
     private lateinit var fakeTimerService: FakeTimerService
 
     @Before
@@ -26,14 +24,29 @@ class CommitWorklogViewModelTest {
         fakeTimerService = FakeTimerService()
         
         val fakeApi = FakeJiraApi()
-        // Pre-fill fake repository state via the persistent state
+        
+        // Use fake state for setup
         FakeTimerService.fakeState.saveIssueForBranch("feature/test", "JIRA-1")
+        FakeTimerService.fakeState.setLastIssueKey("JIRA-1")
 
-        // Inject fakeState into repository for robust testing
-        // Inject fakeState into repository for robust testing via subclass
-        val realRepository = object : JiraWorklogRepository(nullAs()) {
-             override val api = fakeApi
-             override val persistentState = FakeTimerService.fakeState
+        // Create fake repository based on interface
+        val realRepository = object : WorklogRepository {
+             private val api = fakeApi
+             private val persistentState = FakeTimerService.fakeState
+             
+             override suspend fun getAssignedIssues(): Result<JiraSearchResult> = api.searchAssignedIssues()
+             override suspend fun getIssue(issueKey: String): Result<JiraIssue> = api.getIssueWithSubtasks(issueKey)
+             override suspend fun submitWorklog(issueKey: String, timeSpentSeconds: Int, comment: String?): Result<JiraWorklogResponse> =
+                 api.submitWorklog(issueKey, timeSpentSeconds, comment)
+                 
+             override fun saveSelectedIssue(issueKey: String, branchName: String?) {
+                 persistentState.setLastIssueKey(issueKey)
+                 if (branchName != null) persistentState.saveIssueForBranch(branchName, issueKey)
+             }
+             
+             override fun getSavedIssueKey(branchName: String?): String? {
+                 return branchName?.let { persistentState.getIssueForBranch(it) } ?: persistentState.getLastIssueKey()
+             }
         }
         
         viewModel = CommitWorklogViewModel(
@@ -58,8 +71,6 @@ class CommitWorklogViewModelTest {
     }
 
     // Fakes
-    // We suppress "CAST_NEVER_SUCCEEDS" etc by passing null as any
-    // Fake API implementation for testing main logic
     class FakeJiraApi : com.github.artusm.jetbrainspluginjiraworklog.jira.JiraApi {
         private val taskType = com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueType("Task", false)
         private val bugType = com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueType("Bug", false)
@@ -86,25 +97,38 @@ class CommitWorklogViewModelTest {
         }
     }
 
-    class FakeTimerService : JiraWorklogTimerService(nullAs(), kotlinx.coroutines.CoroutineScope(Dispatchers.Unconfined)) {
+    class FakeTimerService : TimerService {
         
         companion object {
-            // Static instance to ensure availability during super init
-            val fakeState = com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState().apply {
-                setStatus(com.github.artusm.jetbrainspluginjiraworklog.model.TimeTrackingStatus.STOPPED)
+            val fakeState = JiraWorklogPersistentState().apply {
+                setStatus(TimeTrackingStatus.STOPPED)
                 setTotalTimeMs(5000L)
             }
         }
 
-        // Use custom getter to avoid initialization order issues with backing fields
-        override val persistentState: com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState
-            get() = fakeState
+        private val _timeFlow = MutableStateFlow(fakeState.getTotalTimeMs())
+        override val timeFlow: StateFlow<Long> = _timeFlow.asStateFlow()
+        
+        private val _statusFlow = MutableStateFlow(fakeState.getStatus())
+        override val statusFlow: StateFlow<TimeTrackingStatus> = _statusFlow.asStateFlow()
 
-        override fun getTotalTimeMs(): Long = 5000L
-        override fun reset() {}
+        override fun getStatus(): TimeTrackingStatus = _statusFlow.value
+        override fun getTotalTimeMs(): Long = _timeFlow.value
+        override fun getTotalTimeSeconds(): Int = (_timeFlow.value / 1000).toInt()
+        override fun toggleRunning() {}
+        override fun setStatus(status: TimeTrackingStatus) { _statusFlow.value = status }
+        override fun pause() {}
+        override fun resume() {}
+        override fun reset() { 
+            _timeFlow.value = 0L
+            fakeState.setTotalTimeMs(0L)
+        }
+        override fun addTimeMs(timeMs: Long) {
+            _timeFlow.value += timeMs
+            fakeState.setTotalTimeMs(_timeFlow.value)
+        }
+        override fun autoPauseByFocus() {}
+        override fun autoResumeFromFocus() {}
+        override fun autoPauseByProjectSwitch() {}
     }
 }
-
-// Helper to bypass non-null check for test
-@Suppress("UNCHECKED_CAST")
-private fun <T> nullAs(): T = null as T

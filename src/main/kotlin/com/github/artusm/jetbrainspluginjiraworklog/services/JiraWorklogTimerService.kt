@@ -12,10 +12,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 @Service(Service.Level.PROJECT)
-open class JiraWorklogTimerService(
+class JiraWorklogTimerService(
     private val project: Project?,
     private val coroutineScope: CoroutineScope
-) : CoroutineScope {
+) : CoroutineScope, TimerService {
     
     override val coroutineContext = coroutineScope.coroutineContext
     
@@ -24,18 +24,18 @@ open class JiraWorklogTimerService(
         private const val TICK_INTERVAL_MS = 1000L
     }
     
-    protected open val persistentState: JiraWorklogPersistentState 
+    private val persistentState: JiraWorklogPersistentState 
         get() = project?.service() ?: throw IllegalStateException("Project is null")
         
-    protected open val settings: JiraSettings get() = JiraSettings.getInstance()
+    private val settings: JiraSettings get() = JiraSettings.getInstance()
     
     // Lazy to avoid accessing persistentState in init if mocked
     private val _timeFlow by lazy { MutableStateFlow(persistentState.getTotalTimeMs()) }
-    val timeFlow: StateFlow<Long> get() = _timeFlow.asStateFlow()
+    override val timeFlow: StateFlow<Long> get() = _timeFlow.asStateFlow()
     
     private val _statusFlow by lazy { MutableStateFlow(persistentState.getStatus()) }
-    val statusFlow: StateFlow<TimeTrackingStatus> get() = _statusFlow.asStateFlow()
-    
+    override val statusFlow: StateFlow<TimeTrackingStatus> get() = _statusFlow.asStateFlow()
+
     private var tickerJob: Job? = null
     private var lastTickTime: Long = 0L
     
@@ -96,12 +96,12 @@ open class JiraWorklogTimerService(
             println("Jira Worklog Timer: System sleep detected (${sleepDurationMs}ms gap), timer paused")
         }
     }
+
+    override fun getStatus(): TimeTrackingStatus = _statusFlow.value
+    override fun getTotalTimeMs(): Long = _timeFlow.value
+    override fun getTotalTimeSeconds(): Int = (_timeFlow.value / 1000).toInt()
     
-    fun getStatus(): TimeTrackingStatus = _statusFlow.value
-    open fun getTotalTimeMs(): Long = _timeFlow.value
-    fun getTotalTimeSeconds(): Int = (_timeFlow.value / 1000).toInt()
-    
-    fun toggleRunning() {
+    override fun toggleRunning() {
         persistentState.clearAutoPauseFlags()
         when (_statusFlow.value) {
             TimeTrackingStatus.RUNNING, TimeTrackingStatus.IDLE -> setStatus(TimeTrackingStatus.STOPPED)
@@ -109,7 +109,7 @@ open class JiraWorklogTimerService(
         }
     }
     
-    fun setStatus(status: TimeTrackingStatus) {
+    override fun setStatus(status: TimeTrackingStatus) {
         val now = System.currentTimeMillis()
         
         _statusFlow.value = status
@@ -125,20 +125,20 @@ open class JiraWorklogTimerService(
         lastTickTime = now
     }
     
-    fun pause() {
+    override fun pause() {
         persistentState.clearAutoPauseFlags()
         if (_statusFlow.value == TimeTrackingStatus.RUNNING) {
             setStatus(TimeTrackingStatus.IDLE)
         }
     }
     
-    fun resume() {
+    override fun resume() {
         if (_statusFlow.value == TimeTrackingStatus.IDLE) {
             setStatus(TimeTrackingStatus.RUNNING)
         }
     }
     
-    open fun reset() {
+    override fun reset() {
         stopTicking()
         _timeFlow.value = 0L
         persistentState.reset()
@@ -146,7 +146,7 @@ open class JiraWorklogTimerService(
         setStatus(TimeTrackingStatus.STOPPED)
     }
     
-    fun addTimeMs(timeMs: Long) {
+    override fun addTimeMs(timeMs: Long) {
         _timeFlow.update { current ->
             val newTime = current + timeMs
             persistentState.setTotalTimeMs(newTime)
@@ -154,21 +154,21 @@ open class JiraWorklogTimerService(
         }
     }
     
-    fun autoPauseByFocus() {
+    override fun autoPauseByFocus() {
         if (_statusFlow.value == TimeTrackingStatus.RUNNING) {
             persistentState.setAutoPausedByFocus(true)
             setStatus(TimeTrackingStatus.IDLE)
         }
     }
     
-    fun autoResumeFromFocus() {
+    override fun autoResumeFromFocus() {
         if (persistentState.isAutoPausedByFocus() && _statusFlow.value == TimeTrackingStatus.IDLE) {
             persistentState.setAutoPausedByFocus(false)
             setStatus(TimeTrackingStatus.RUNNING)
         }
     }
     
-    fun autoPauseByProjectSwitch() {
+    override fun autoPauseByProjectSwitch() {
         if (_statusFlow.value == TimeTrackingStatus.RUNNING) {
             persistentState.setAutoPausedByProjectSwitch(true)
             setStatus(TimeTrackingStatus.IDLE)

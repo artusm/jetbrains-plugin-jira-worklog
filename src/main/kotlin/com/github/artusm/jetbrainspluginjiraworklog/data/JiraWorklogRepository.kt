@@ -12,36 +12,36 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 
 @Service(Service.Level.PROJECT)
-open class JiraWorklogRepository(
+class JiraWorklogRepository(
     private val project: Project?
-) {
+) : WorklogRepository {
 
     private val settings: JiraSettings get() = JiraSettings.getInstance()
     
     // Use injected API if present, otherwise create new client
-    protected val api: JiraApi by lazy { JiraApiClient(settings) }
+    private val api: JiraApi by lazy { JiraApiClient(settings) }
     
-    protected val persistentState: JiraWorklogPersistentState
+    private val persistentState: JiraWorklogPersistentState
         get() = project?.service() ?: throw IllegalStateException("Project is null")
 
     /**
      * Search for issues assigned to the current user.
      */
-    suspend fun getAssignedIssues(): Result<JiraSearchResult> {
+    override suspend fun getAssignedIssues(): Result<JiraSearchResult> {
         return api.searchAssignedIssues()
     }
 
     /**
      * Get details for a specific issue.
      */
-    suspend fun getIssue(issueKey: String): Result<JiraIssue> {
+    override suspend fun getIssue(issueKey: String): Result<JiraIssue> {
         return api.getIssueWithSubtasks(issueKey)
     }
 
     /**
      * Submit a worklog entry.
      */
-    suspend fun submitWorklog(
+    override suspend fun submitWorklog(
         issueKey: String, 
         timeSpentSeconds: Int, 
         comment: String?
@@ -52,7 +52,7 @@ open class JiraWorklogRepository(
     /**
      * Save the selected issue key for a specific branch (and globally as fallback).
      */
-    fun saveSelectedIssue(issueKey: String, branchName: String?) {
+    override fun saveSelectedIssue(issueKey: String, branchName: String?) {
         // Always update global fallback
         persistentState.setLastIssueKey(issueKey)
         
@@ -65,7 +65,7 @@ open class JiraWorklogRepository(
     /**
      * Get the saved issue key for a branch, falling back to the last used global key.
      */
-    fun getSavedIssueKey(branchName: String?): String? {
+    override fun getSavedIssueKey(branchName: String?): String? {
         val branchKey = branchName?.let { persistentState.getIssueForBranch(it) }
         return branchKey ?: persistentState.getLastIssueKey()
     }
