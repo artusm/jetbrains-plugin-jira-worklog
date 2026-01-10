@@ -8,12 +8,17 @@ import com.intellij.openapi.project.Project
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
 import org.jetbrains.annotations.NotNull
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Listens for Git repository changes (including branch switches) and
  * triggers auto-pause if enabled in settings.
  */
 class BranchChangeListener : GitRepositoryChangeListener {
+
+    companion object {
+        private const val CLEANUP_INTERVAL = 10
+    }
 
     private var lastBranchName: String? = null
 
@@ -64,34 +69,26 @@ class BranchChangeListener : GitRepositoryChangeListener {
         
         // Periodically clean up deleted branches (every 10th branch change)
         if (shouldCleanupDeletedBranches()) {
-            cleanupDeletedBranches(project, repository)
+            cleanupDeletedBranches(persistentState, project, repository)
         }
     }
     
-    private var branchChangeCount = 0
+    private val branchChangeCount = AtomicInteger(0)
     
     private fun shouldCleanupDeletedBranches(): Boolean {
-        branchChangeCount++
-        return branchChangeCount % 10 == 0
+        return branchChangeCount.incrementAndGet() % CLEANUP_INTERVAL == 0
     }
     
-    private fun cleanupDeletedBranches(project: Project, repository: GitRepository) {
-        val persistentState = project.service<JiraWorklogPersistentState>()
-        
-        // Get all active branch names (local + remote)
-        val activeBranches = mutableSetOf<String>()
-        
-        // Add local branches
-        repository.branches.localBranches.forEach { branch ->
-            activeBranches.add(branch.name)
-        }
-        
-        // Add remote branches
-        repository.branches.remoteBranches.forEach { branch ->
-            activeBranches.add(branch.name)
-        }
-        
-        // Clean up mappings for deleted branches
+    private fun cleanupDeletedBranches(
+        persistentState: JiraWorklogPersistentState,
+        project: Project,
+        repository: GitRepository
+    ) {
+        val activeBranches = git4idea.repo.GitRepositoryManager.getInstance(project).repositories
+            .flatMap { it.branches.localBranches + it.branches.remoteBranches }
+            .map { it.name }
+            .toSet()
+
         persistentState.cleanupDeletedBranches(activeBranches)
     }
 

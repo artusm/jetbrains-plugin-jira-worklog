@@ -26,7 +26,6 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
         // Auto-pause state tracking
         var autoPausedByFocus: Boolean = false,
         var autoPausedByProjectSwitch: Boolean = false,
-        
         // Branch → Jira Issue Key mapping
         var branchToIssueMap: MutableMap<String, String> = mutableMapOf()
     )
@@ -99,8 +98,7 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
      * Keeps only branches that are in the provided set of active branch names.
      */
     fun cleanupDeletedBranches(activeBranchNames: Set<String>) {
-        val keysToRemove = state.branchToIssueMap.keys.filter { it !in activeBranchNames }
-        keysToRemove.forEach { state.branchToIssueMap.remove(it) }
+        state.branchToIssueMap.keys.removeIf { it !in activeBranchNames }
     }
     
     fun reset() {
