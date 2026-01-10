@@ -79,9 +79,9 @@ class JiraWorklogTimerService(
         if (_statusFlow.value == TimeTrackingStatus.RUNNING) {
             val timeToAdd = if (elapsed > SLEEP_DETECTION_THRESHOLD_MS) 0L else elapsed
             
-            // Update state atomically
-            val newTime = _timeFlow.value + timeToAdd
-            _timeFlow.value = newTime
+            // Update state atomically to avoid race with addTimeMs()
+            _timeFlow.update { current -> current + timeToAdd }
+            val newTime = _timeFlow.value
             
             // Persist periodically or on change (optimized to not write to disk every second if strictly needed,
             // but for PersistentStateComponent it caches in memory)
