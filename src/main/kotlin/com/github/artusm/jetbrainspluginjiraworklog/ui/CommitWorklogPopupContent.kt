@@ -9,28 +9,22 @@ import com.github.artusm.jetbrainspluginjiraworklog.utils.TimeFormatter
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.ui.components.JBTextField
-import com.intellij.util.ui.FormBuilder
 import git4idea.repo.GitRepositoryManager
-import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.GridLayout
 import javax.swing.*
 
 /**
- * Dialog for committing worklog to Jira.
- * Includes task selector, time editor with fast actions, and comment field.
+ * Inline popup content for committing worklog to Jira.
+ * Adapted from TimeTrackerPopupContent to use JBPopup instead of DialogWrapper.
  */
-class CommitWorklogDialog(private val project: Project) : DialogWrapper(project) {
+class CommitWorklogPopupContent(private val project: Project) : Box(BoxLayout.Y_AXIS) {
     
-    companion object {
-        fun show(project: Project) {
-            val dialog = CommitWorklogDialog(project)
-            dialog.show()
-        }
-    }
+    var popup: JBPopup? = null
     
     private val settings = JiraSettings.getInstance()
     private val timerService = project.service<JiraWorklogTimerService>()
@@ -39,60 +33,63 @@ class CommitWorklogDialog(private val project: Project) : DialogWrapper(project)
     
     private val taskComboBox = ComboBox<JiraIssue>(DefaultComboBoxModel())
     private val timeField = JBTextField()
-    private val commentArea = JTextArea(5, 40)
+    private val commentArea = JTextArea(3, 30)
     
     private var currentTimeMs: Long = 0L
     
     init {
-        title = "Commit Worklog to Jira"
         currentTimeMs = timerService.getTotalTimeMs()
-        init()
-        loadInitialData()
-    }
-    
-    override fun createCenterPanel(): JComponent {
-        val panel = JPanel(BorderLayout())
         
-        // Update time field
-        updateTimeField()
+        // Add padding border
+        border = BorderFactory.createEmptyBorder(5, 10, 5, 10)
         
-        // Create time editor buttons
-        val timeButtonPanel = createTimeButtonPanel()
+        // Create form panel
+        val formPanel = JPanel(GridLayout(0, 2, 4, 4))
+        add(formPanel)
         
-        // Create form
-        val formPanel = FormBuilder.createFormBuilder()
-            .addLabeledComponent("Jira Issue:", taskComboBox)
-            .addSeparator()
-            .addLabeledComponent("Time Spent:", createTimePanel())
-            .addComponent(timeButtonPanel)
-            .addSeparator()
-            .addLabeledComponent("Comment:", JScrollPane(commentArea))
-            .panel
+        // Jira Issue selector
+        formPanel.add(JLabel("Jira Issue:", JLabel.RIGHT))
+        formPanel.add(taskComboBox)
         
-        panel.add(formPanel, BorderLayout.CENTER)
-        
-        return panel
-    }
-    
-    private fun createTimePanel(): JPanel {
-        val panel = JPanel(FlowLayout(FlowLayout.LEFT))
+        // Time spent field
+        formPanel.add(JLabel("Time Spent:", JLabel.RIGHT))
         timeField.preferredSize = Dimension(150, timeField.preferredSize.height)
-        panel.add(timeField)
-        panel.add(JLabel("(format: 2h 30m)"))
-        return panel
-    }
-    
-    private fun createTimeButtonPanel(): JPanel {
-        val panel = JPanel(FlowLayout(FlowLayout.LEFT))
+        updateTimeField()
+        formPanel.add(timeField)
         
-        panel.add(JLabel("Quick adjust: "))
-        panel.add(createTimeButton("+1h", 3600 * 1000))
-        panel.add(createTimeButton("-1h", -3600 * 1000))
-        panel.add(createTimeButton("+30m", 30 * 60 * 1000))
-        panel.add(createTimeButton("×2") { currentTimeMs *= 2 })
-        panel.add(createTimeButton("÷2") { currentTimeMs /= 2 })
+        // Create time adjustment buttons
+        val timeButtons = Box.createHorizontalBox()
+        add(timeButtons)
         
-        return panel
+        timeButtons.add(JLabel("Quick adjust: "))
+        timeButtons.add(createTimeButton("+1h", 3600 * 1000))
+        timeButtons.add(createTimeButton("-1h", -3600 * 1000))
+        timeButtons.add(createTimeButton("+30m", 30 * 60 * 1000))
+        timeButtons.add(createTimeButton("×2") { currentTimeMs *= 2 })
+        timeButtons.add(createTimeButton("÷2") { currentTimeMs /= 2 })
+        
+        // Comment field
+        val commentPanel = JPanel()
+        commentPanel.layout = BoxLayout(commentPanel, BoxLayout.Y_AXIS)
+        commentPanel.add(JLabel("Comment:"))
+        commentArea.lineWrap = true
+        commentArea.wrapStyleWord = true
+        val scrollPane = JScrollPane(commentArea)
+        scrollPane.preferredSize = Dimension(300, 60)
+        commentPanel.add(scrollPane)
+        add(commentPanel)
+        
+        // Submit button
+        val submitPanel = JPanel(FlowLayout(FlowLayout.RIGHT))
+        val submitButton = JButton("Submit Worklog")
+        submitButton.addActionListener {
+            submitWorklog()
+        }
+        submitPanel.add(submitButton)
+        add(submitPanel)
+        
+        // Load initial data
+        loadInitialData()
     }
     
     private fun createTimeButton(label: String, deltaMs: Long): JButton {
@@ -141,7 +138,7 @@ class CommitWorklogDialog(private val project: Project) : DialogWrapper(project)
             val result = jiraClient.searchAssignedIssues()
             
             SwingUtilities.invokeLater {
-                if (result.isSuccess) {
+                if (!project.isDisposed && result.isSuccess) {
                     val issues = result.getOrNull()?.issues ?: emptyList()
                     val model = taskComboBox.model as DefaultComboBoxModel<JiraIssue>
                     
@@ -174,11 +171,6 @@ class CommitWorklogDialog(private val project: Project) : DialogWrapper(project)
                             loadSpecificIssue(preselectedKey)
                         }
                     }
-                } else {
-                    Messages.showErrorDialog(
-                        "Failed to load Jira issues: ${result.exceptionOrNull()?.message}",
-                        "Error Loading Issues"
-                    )
                 }
             }
         }.start()
@@ -189,7 +181,7 @@ class CommitWorklogDialog(private val project: Project) : DialogWrapper(project)
             val result = jiraClient.getIssueWithSubtasks(issueKey)
             
             SwingUtilities.invokeLater {
-                if (result.isSuccess) {
+                if (!project.isDisposed && result.isSuccess) {
                     val issue = result.getOrNull()
                     if (issue != null) {
                         val model = taskComboBox.model as DefaultComboBoxModel<JiraIssue>
@@ -206,17 +198,17 @@ class CommitWorklogDialog(private val project: Project) : DialogWrapper(project)
         }.start()
     }
     
-    override fun doOKAction() {
+    private fun submitWorklog() {
         val selectedIssue = taskComboBox.selectedItem as? JiraIssue
         
         if (selectedIssue == null) {
-            Messages.showErrorDialog("Please select a Jira issue", "No Issue Selected")
+            Messages.showErrorDialog(project, "Please select a Jira issue", "No Issue Selected")
             return
         }
         
         val timeSpentSeconds = (currentTimeMs / 1000).toInt()
         if (timeSpentSeconds <= 0) {
-            Messages.showErrorDialog("Time spent must be greater than zero", "Invalid Time")
+            Messages.showErrorDialog(project, "Time spent must be greater than zero", "Invalid Time")
             return
         }
         
@@ -227,21 +219,26 @@ class CommitWorklogDialog(private val project: Project) : DialogWrapper(project)
             val result = jiraClient.submitWorklog(selectedIssue.key, timeSpentSeconds, comment.ifBlank { null })
             
             SwingUtilities.invokeLater {
-                if (result.isSuccess) {
-                    Messages.showInfoMessage(
-                        "Successfully logged ${TimeFormatter.formatJira(currentTimeMs)} to ${selectedIssue.key}",
-                        "Worklog Submitted"
-                    )
-                    
-                    // Reset timer
-                    timerService.reset()
-                    
-                    super.doOKAction()
-                } else {
-                    Messages.showErrorDialog(
-                        "Failed to submit worklog: ${result.exceptionOrNull()?.message}",
-                        "Submission Failed"
-                    )
+                if (!project.isDisposed) {
+                    if (result.isSuccess) {
+                        Messages.showInfoMessage(
+                            project,
+                            "Successfully logged ${TimeFormatter.formatJira(currentTimeMs)} to ${selectedIssue.key}",
+                            "Worklog Submitted"
+                        )
+                        
+                        // Reset timer
+                        timerService.reset()
+                        
+                        // Close popup
+                        popup?.cancel()
+                    } else {
+                        Messages.showErrorDialog(
+                            project,
+                            "Failed to submit worklog: ${result.exceptionOrNull()?.message}",
+                            "Submission Failed"
+                        )
+                    }
                 }
             }
         }.start()

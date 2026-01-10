@@ -7,9 +7,11 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.ui.UISettings
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.wm.CustomStatusBarWidget
 import com.intellij.openapi.wm.StatusBar
 import com.intellij.ui.JBColor
+import com.intellij.ui.awt.RelativePoint
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import org.jetbrains.annotations.NotNull
@@ -104,7 +106,30 @@ class JiraWorklogWidget(
 
     private fun showCommitDialog() {
         ApplicationManager.getApplication().invokeLater {
-            CommitWorklogDialog.show(project)
+            val content = CommitWorklogPopupContent(project)
+            
+            val popupBuilder = JBPopupFactory.getInstance().createComponentPopupBuilder(content, null)
+            popupBuilder.setCancelOnClickOutside(true)
+            popupBuilder.setFocusable(true)
+            popupBuilder.setRequestFocus(true)
+            popupBuilder.setShowBorder(true)
+            popupBuilder.setShowShadow(true)
+            
+            val popup = popupBuilder.createPopup()
+            content.popup = popup
+            
+            // Position popup above the widget, aligned to the right
+            val visibleRect = this.visibleRect
+            val preferredSize = content.preferredSize
+            val point = RelativePoint(
+                this, 
+                Point(visibleRect.x + visibleRect.width - preferredSize.width, 
+                      visibleRect.y - (preferredSize.height + 15))
+            )
+            popup.show(point)
+            
+            // Request focus for better interactivity
+            content.requestFocus()
         }
     }
 
