@@ -38,7 +38,7 @@ open class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPers
         this.state = state
     }
 
-    fun getTotalTimeMs(): Long = state.totalTimeMs
+    open fun getTotalTimeMs(): Long = state.totalTimeMs
     
     fun setTotalTimeMs(timeMs: Long) {
         state.totalTimeMs = timeMs
@@ -48,7 +48,7 @@ open class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPers
         state.totalTimeMs += timeMs
     }
     
-    fun getStatus(): TimeTrackingStatus {
+    open fun getStatus(): TimeTrackingStatus {
         return try {
             TimeTrackingStatus.valueOf(state.status)
         } catch (e: IllegalArgumentException) {

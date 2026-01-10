@@ -18,6 +18,7 @@ class GitBranchParser {
         val parentKey: String? = null
     ) {
         fun getPrimaryKey(): String? = subtaskKey ?: parentKey
+        fun hasAnyKey(): Boolean = getPrimaryKey() != null
     }
     
     fun parseBranchName(branchName: String?): ParseResult {

@@ -15,7 +15,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * Uses Kotlin Coroutines for timing and StateFlow for reactive updates.
  */
 @Service(Service.Level.PROJECT)
-open class JiraWorklogTimerService(private val project: Project) : CoroutineScope {
+open class JiraWorklogTimerService(
+    private val project: Project?,
+    // Optional dependency for testing to avoid initialization order issues
+    private val testPersistentState: JiraWorklogPersistentState? = null
+) : CoroutineScope {
     
     // Manual scope since we might be on older IntelliJ platform where CoroutineScope injection 
     // isn't guaranteed or valid for all constructor patterns.
@@ -27,7 +31,7 @@ open class JiraWorklogTimerService(private val project: Project) : CoroutineScop
         private const val TICK_INTERVAL_MS = 1000L
     }
     
-    protected open val persistentState: JiraWorklogPersistentState get() = project.service()
+    protected open val persistentState: JiraWorklogPersistentState get() = testPersistentState ?: project!!.service()
     protected open val settings: JiraSettings get() = JiraSettings.getInstance()
     
     // Lazy to avoid accessing persistentState in init if mocked
@@ -99,7 +103,7 @@ open class JiraWorklogTimerService(private val project: Project) : CoroutineScop
     }
     
     fun getStatus(): TimeTrackingStatus = _statusFlow.value
-    fun getTotalTimeMs(): Long = _timeFlow.value
+    open fun getTotalTimeMs(): Long = _timeFlow.value
     fun getTotalTimeSeconds(): Int = (_timeFlow.value / 1000).toInt()
     
     fun toggleRunning() {
@@ -139,7 +143,7 @@ open class JiraWorklogTimerService(private val project: Project) : CoroutineScop
         }
     }
     
-    fun reset() {
+    open fun reset() {
         stopTicking()
         _timeFlow.value = 0L
         persistentState.reset()

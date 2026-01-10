@@ -16,7 +16,7 @@ import com.intellij.openapi.project.Project
  * Acts as a single source of truth for the UI and other services.
  */
 @Service(Service.Level.PROJECT)
-open class JiraWorklogRepository(private val project: Project) {
+open class JiraWorklogRepository(private val project: Project?) {
 
     protected open val settings: JiraSettings get() = JiraSettings.getInstance()
     
@@ -24,12 +24,12 @@ open class JiraWorklogRepository(private val project: Project) {
     // We could also make JiraApiClient a service.
     protected open val api: JiraApi by lazy { JiraApiClient(settings) }
     
-    protected open val persistentState: JiraWorklogPersistentState get() = project.service()
+    protected open val persistentState: JiraWorklogPersistentState get() = project!!.service()
 
     /**
      * Search for issues assigned to the current user.
      */
-    suspend fun getAssignedIssues(): Result<JiraSearchResult> {
+    open suspend fun getAssignedIssues(): Result<JiraSearchResult> {
         return api.searchAssignedIssues()
     }
 
@@ -43,7 +43,7 @@ open class JiraWorklogRepository(private val project: Project) {
     /**
      * Submit a worklog entry.
      */
-    suspend fun submitWorklog(
+    open suspend fun submitWorklog(
         issueKey: String, 
         timeSpentSeconds: Int, 
         comment: String?
@@ -54,7 +54,7 @@ open class JiraWorklogRepository(private val project: Project) {
     /**
      * Save the selected issue key for a specific branch (and globally as fallback).
      */
-    fun saveSelectedIssue(issueKey: String, branchName: String?) {
+    open fun saveSelectedIssue(issueKey: String, branchName: String?) {
         // Always update global fallback
         persistentState.setLastIssueKey(issueKey)
         
@@ -67,7 +67,7 @@ open class JiraWorklogRepository(private val project: Project) {
     /**
      * Get the saved issue key for a branch, falling back to the last used global key.
      */
-    fun getSavedIssueKey(branchName: String?): String? {
+    open fun getSavedIssueKey(branchName: String?): String? {
         val branchKey = branchName?.let { persistentState.getIssueForBranch(it) }
         return branchKey ?: persistentState.getLastIssueKey()
     }

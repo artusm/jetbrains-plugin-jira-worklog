@@ -71,9 +71,12 @@ class CommitWorklogViewModelTest {
     // Fakes
     // We suppress "CAST_NEVER_SUCCEEDS" etc by passing null as any
     class FakeRepository : JiraWorklogRepository(nullAs()) {
+        private val taskType = com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueType("Task", false)
+        private val bugType = com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueType("Bug", false)
+        
         var issuesToReturn = listOf(
-            JiraIssue("JIRA-1", "Task 1", com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueType("Task", "", false)),
-            JiraIssue("JIRA-2", "Task 2", com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueType("Bug", "", false))
+            JiraIssue("JIRA-1", com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueFields("Task 1", taskType)),
+            JiraIssue("JIRA-2", com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueFields("Task 2", bugType))
         )
         
         // Override dependencies to avoid NPE from super
@@ -82,7 +85,7 @@ class CommitWorklogViewModelTest {
         override val persistentState: com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState get() = nullAs()
         
         override suspend fun getAssignedIssues(): Result<JiraSearchResult> {
-            return Result.success(JiraSearchResult(issuesToReturn.size, 50, issuesToReturn.size, issuesToReturn))
+            return Result.success(JiraSearchResult(issuesToReturn, issuesToReturn.size))
         }
         
         override fun getSavedIssueKey(branchName: String?): String? {
@@ -90,7 +93,7 @@ class CommitWorklogViewModelTest {
         }
         
         override suspend fun submitWorklog(issueKey: String, timeSpentSeconds: Int, comment: String?): Result<JiraWorklogResponse> {
-             return Result.success(JiraWorklogResponse("100", "http://jira/100"))
+             return Result.success(JiraWorklogResponse("100", "ISSUE-100", "1h"))
         }
 
         override fun saveSelectedIssue(issueKey: String, branchName: String?) {
@@ -98,21 +101,13 @@ class CommitWorklogViewModelTest {
         }
     }
     
-    class FakeTimerService : JiraWorklogTimerService(nullAs()) {
-        // We need to return a dummy state that doesn't crash on getStatus() called in init
-        // BUT getStatus() calls persistentState.getStatus().
-        // So we strictly need to override persistentState to return something that has getStatus().
-        // OR we override getStatus() but _statusFlow accesses persistentState.
-        // Wait, _statusFlow is instantiated in super init accessing persistentState.getStatus().
-        // So we MUST override persistentState to return a mock/fake.
-        
-        // Since we can't easily mock PersistentState without Mockito, we can just return a dummy
-        // that returns STOPPED.
-        override val persistentState: com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState = 
-            object : com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState() {
-                override fun getStatus() = com.github.artusm.jetbrainspluginjiraworklog.model.TimeTrackingStatus.STOPPED
-                override fun getTotalTimeMs() = 5000L
-            }
+    class FakeTimerService : JiraWorklogTimerService(nullAs(), 
+        object : com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState() {
+            override fun getStatus() = com.github.artusm.jetbrainspluginjiraworklog.model.TimeTrackingStatus.STOPPED
+            override fun getTotalTimeMs() = 5000L
+        }
+    ) {
+
 
         override fun getTotalTimeMs(): Long = 5000L
         override fun reset() {}
