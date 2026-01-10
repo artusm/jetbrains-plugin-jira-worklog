@@ -2,7 +2,10 @@ package com.github.artusm.jetbrainspluginjiraworklog.jira
 
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
+import com.github.artusm.jetbrainspluginjiraworklog.utils.TimeFormatter
 import com.intellij.openapi.diagnostic.Logger
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.IOException
@@ -17,7 +20,7 @@ import java.util.*
  * HTTP client for Jira REST API v2.
  * Handles authentication and API requests.
  */
-class JiraApiClient(private val settings: JiraSettings) {
+class JiraApiClient(private val settings: JiraSettings) : JiraApi {
     
     companion object {
         private val LOG = Logger.getInstance(JiraApiClient::class.java)
@@ -34,24 +37,24 @@ class JiraApiClient(private val settings: JiraSettings) {
      * @param maxResults Maximum number of results to return
      * @return Search result with matching issues
      */
-    fun searchAssignedIssues(
-        jql: String = "assignee=currentuser()",
-        maxResults: Int = 50
-    ): Result<JiraSearchResult> {
+    override suspend fun searchAssignedIssues(
+        jql: String,
+        maxResults: Int
+    ): Result<JiraSearchResult> = withContext(Dispatchers.IO) {
         val baseUrl = settings.getJiraUrl()
         if (baseUrl.isBlank()) {
-            return Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
+            return@withContext Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
         }
         
         val token = settings.getPersonalAccessToken()
         if (token.isNullOrBlank()) {
-            return Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
+            return@withContext Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
         }
         
         val encodedJql = java.net.URLEncoder.encode(jql, "UTF-8")
         val url = "$baseUrl/rest/api/2/search?jql=$encodedJql&maxResults=$maxResults&fields=key,summary,issuetype"
         
-        return try {
+        try {
             val response = executeGet(url, token)
             val result = json.decodeFromString<JiraSearchResult>(response)
             Result.success(result)
@@ -67,20 +70,20 @@ class JiraApiClient(private val settings: JiraSettings) {
      * @param issueKey The issue key (e.g., "PROJ-123")
      * @return Issue details with subtasks
      */
-    fun getIssueWithSubtasks(issueKey: String): Result<JiraIssue> {
+    override suspend fun getIssueWithSubtasks(issueKey: String): Result<JiraIssue> = withContext(Dispatchers.IO) {
         val baseUrl = settings.getJiraUrl()
         if (baseUrl.isBlank()) {
-            return Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
+            return@withContext Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
         }
         
         val token = settings.getPersonalAccessToken()
         if (token.isNullOrBlank()) {
-            return Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
+            return@withContext Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
         }
         
         val url = "$baseUrl/rest/api/2/issue/$issueKey?fields=key,summary,issuetype,subtasks"
         
-        return try {
+        try {
             val response = executeGet(url, token)
             val issue = json.decodeFromString<JiraIssue>(response)
             Result.success(issue)
@@ -98,23 +101,23 @@ class JiraApiClient(private val settings: JiraSettings) {
      * @param comment Optional worklog comment
      * @return Worklog response if successful
      */
-    fun submitWorklog(
+    override suspend fun submitWorklog(
         issueKey: String,
         timeSpentSeconds: Int,
-        comment: String? = null
-    ): Result<JiraWorklogResponse> {
+        comment: String?
+    ): Result<JiraWorklogResponse> = withContext(Dispatchers.IO) {
         val baseUrl = settings.getJiraUrl()
         if (baseUrl.isBlank()) {
-            return Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
+            return@withContext Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
         }
         
         val token = settings.getPersonalAccessToken()
         if (token.isNullOrBlank()) {
-            return Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
+            return@withContext Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
         }
         
         // Convert seconds to Jira time format
-        val timeSpent = formatTimeForJira(timeSpentSeconds)
+        val timeSpent = TimeFormatter.formatJira(timeSpentSeconds * 1000L)
         
         // Use current time as worklog start time
         val started = ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
@@ -128,7 +131,7 @@ class JiraApiClient(private val settings: JiraSettings) {
         val url = "$baseUrl/rest/api/2/issue/$issueKey/worklog"
         val requestBody = json.encodeToString(request)
         
-        return try {
+        try {
             val response = executePost(url, token, requestBody)
             val worklogResponse = json.decodeFromString<JiraWorklogResponse>(response)
             Result.success(worklogResponse)
@@ -143,20 +146,20 @@ class JiraApiClient(private val settings: JiraSettings) {
      * 
      * @return true if connection is successful
      */
-    fun testConnection(): Result<Boolean> {
+    override suspend fun testConnection(): Result<Boolean> = withContext(Dispatchers.IO) {
         val baseUrl = settings.getJiraUrl()
         if (baseUrl.isBlank()) {
-            return Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
+            return@withContext Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
         }
         
         val token = settings.getPersonalAccessToken()
         if (token.isNullOrBlank()) {
-            return Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
+            return@withContext Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
         }
         
         val url = "$baseUrl/rest/api/2/myself"
         
-        return try {
+        try {
             executeGet(url, token)
             Result.success(true)
         } catch (e: Exception) {
@@ -217,24 +220,6 @@ class JiraApiClient(private val settings: JiraSettings) {
             }
         } finally {
             connection.disconnect()
-        }
-    }
-    
-    private fun formatTimeForJira(seconds: Int): String {
-        val hours = seconds / 3600
-        val minutes = (seconds % 3600) / 60
-        
-        return buildString {
-            if (hours > 0) {
-                append("${hours}h")
-            }
-            if (minutes > 0) {
-                if (hours > 0) append(" ")
-                append("${minutes}m")
-            }
-            if (hours == 0 && minutes == 0) {
-                append("1m") // Minimum 1 minute
-            }
         }
     }
 }

@@ -2,65 +2,68 @@ package com.github.artusm.jetbrainspluginjiraworklog.services
 
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.model.TimeTrackingStatus
-import com.github.artusm.jetbrainspluginjiraworklog.ui.JiraWorklogWidget
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.intellij.util.concurrency.AppExecutorUtil
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Project-level service managing the timer state and time accumulation.
- * Adapted from the reference TimeTrackerService.
+ * Uses Kotlin Coroutines for timing and StateFlow for reactive updates.
  */
 @Service(Service.Level.PROJECT)
-class JiraWorklogTimerService(private val project: Project) {
+open class JiraWorklogTimerService(private val project: Project) : CoroutineScope {
+    
+    // Manual scope since we might be on older IntelliJ platform where CoroutineScope injection 
+    // isn't guaranteed or valid for all constructor patterns.
+    private val job = SupervisorJob()
+    override val coroutineContext = Dispatchers.Default + job
     
     companion object {
-        // Consider system asleep if tick gap exceeds 5 seconds
         private const val SLEEP_DETECTION_THRESHOLD_MS = 5000L
+        private const val TICK_INTERVAL_MS = 1000L
     }
     
-    private val persistentState: JiraWorklogPersistentState = project.service()
-    private val settings: JiraSettings = JiraSettings.getInstance()
-    private var widget: JiraWorklogWidget? = null
+    protected open val persistentState: JiraWorklogPersistentState get() = project.service()
+    protected open val settings: JiraSettings get() = JiraSettings.getInstance()
     
-    private var tickFuture: ScheduledFuture<*>? = null
+    // Lazy to avoid accessing persistentState in init if mocked
+    private val _timeFlow by lazy { MutableStateFlow(persistentState.getTotalTimeMs()) }
+    val timeFlow: StateFlow<Long> get() = _timeFlow.asStateFlow()
+    
+    private val _statusFlow by lazy { MutableStateFlow(persistentState.getStatus()) }
+    val statusFlow: StateFlow<TimeTrackingStatus> get() = _statusFlow.asStateFlow()
+    
+    private var tickerJob: Job? = null
     private var lastTickTime: Long = 0L
     
-    private val tickIntervalMs = 1000L // Update every second
-    
     init {
-        startTicking()
+        // Restore state
+        if (_statusFlow.value == TimeTrackingStatus.RUNNING) {
+            startTicking()
+        }
     }
     
-    /**
-     * Register the widget for updates.
-     */
-    fun registerWidget(widget: JiraWorklogWidget) {
-        this.widget = widget
-        widget.repaint()
-    }
-    
-    /**
-     * Start the background ticker.
-     */
     private fun startTicking() {
+        tickerJob?.cancel()
         lastTickTime = System.currentTimeMillis()
         
-        tickFuture = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(
-            { tick() },
-            tickIntervalMs,
-            tickIntervalMs,
-            TimeUnit.MILLISECONDS
-        )
+        tickerJob = launch {
+            while (isActive) {
+                delay(TICK_INTERVAL_MS)
+                tick()
+            }
+        }
     }
     
-    /**
-     * Called every second to update the timer.
-     * Also detects system sleep via abnormal time gaps.
-     */
+    private fun stopTicking() {
+        tickerJob?.cancel()
+        tickerJob = null
+    }
+    
     private fun tick() {
         val now = System.currentTimeMillis()
         val elapsed = now - lastTickTime
@@ -68,237 +71,110 @@ class JiraWorklogTimerService(private val project: Project) {
         // Check for abnormal time gap indicating system sleep
         if (elapsed > SLEEP_DETECTION_THRESHOLD_MS && settings.isPauseOnSystemSleep()) {
             handleSystemSleep(elapsed)
+            lastTickTime = now
+            return
         }
         
         lastTickTime = now
         
-        synchronized(this) {
-            val status = persistentState.getStatus()
+        if (_statusFlow.value == TimeTrackingStatus.RUNNING) {
+            val timeToAdd = if (elapsed > SLEEP_DETECTION_THRESHOLD_MS) 0L else elapsed
             
-            if (status == TimeTrackingStatus.RUNNING) {
-                // Don't add time if we just recovered from sleep
-                // (elapsed would be huge, we only want to add real working time)
-                val timeToAdd = if (elapsed > SLEEP_DETECTION_THRESHOLD_MS) {
-                    0L // Don't count sleep time
-                } else {
-                    elapsed
-                }
-                
-                persistentState.addTimeMs(timeToAdd)
-                persistentState.setLastUpdateTimestamp(now)
-                
-                // Update widget on EDT
-                widget?.repaint()
-            }
-        }
-    }
-    
-    /**
-     * Handle system sleep detection.
-     * Automatically pauses the timer when a large time gap is detected.
-     */
-    private fun handleSystemSleep(sleepDurationMs: Long) {
-        synchronized(this) {
-            if (persistentState.getStatus() == TimeTrackingStatus.RUNNING) {
-                setStatus(TimeTrackingStatus.IDLE)
-                // Log for debugging (user can see this in IDE logs)
-                println("Jira Worklog Timer: System sleep detected (${sleepDurationMs}ms gap), timer paused")
-            }
-        }
-    }
-    
-    /**
-     * Get the current timer status.
-     */
-    fun getStatus(): TimeTrackingStatus {
-        return synchronized(this) {
-            persistentState.getStatus()
-        }
-    }
-    
-    /**
-     * Get total accumulated time in seconds.
-     */
-    fun getTotalTimeSeconds(): Int {
-        return synchronized(this) {
-            (persistentState.getTotalTimeMs() / 1000).toInt()
-        }
-    }
-    
-    /**
-     * Get total accumulated time in milliseconds.
-     */
-    fun getTotalTimeMs(): Long {
-        return synchronized(this) {
-            persistentState.getTotalTimeMs()
-        }
-    }
-    
-    /**
-     * Toggle between running and stopped.
-     */
-    fun toggleRunning() {
-        synchronized(this) {
-            val currentStatus = persistentState.getStatus()
+            // Update state atomically
+            val newTime = _timeFlow.value + timeToAdd
+            _timeFlow.value = newTime
             
-            persistentState.clearAutoPauseFlags() // Clear auto-pause flags on manual toggle
-            when (currentStatus) {
-                TimeTrackingStatus.RUNNING, TimeTrackingStatus.IDLE -> {
-                    setStatus(TimeTrackingStatus.STOPPED)
-                }
-                TimeTrackingStatus.STOPPED -> {
-                    setStatus(TimeTrackingStatus.RUNNING)
-                }
-            }
-        }
-    }
-    
-    /**
-     * Set the timer status.
-     */
-    fun setStatus(status: TimeTrackingStatus) {
-        synchronized(this) {
-            val now = System.currentTimeMillis()
-            persistentState.setStatus(status)
+            // Persist periodically or on change (optimized to not write to disk every second if strictly needed,
+            // but for PersistentStateComponent it caches in memory)
+            persistentState.setTotalTimeMs(newTime)
             persistentState.setLastUpdateTimestamp(now)
-            lastTickTime = now
-            
-            // Update widget
-            widget?.repaint()
         }
     }
     
-    /**
-     * Pause the timer (set to IDLE state).
-     */
+    private fun handleSystemSleep(sleepDurationMs: Long) {
+        if (_statusFlow.value == TimeTrackingStatus.RUNNING) {
+            setStatus(TimeTrackingStatus.IDLE)
+            println("Jira Worklog Timer: System sleep detected (${sleepDurationMs}ms gap), timer paused")
+        }
+    }
+    
+    fun getStatus(): TimeTrackingStatus = _statusFlow.value
+    fun getTotalTimeMs(): Long = _timeFlow.value
+    fun getTotalTimeSeconds(): Int = (_timeFlow.value / 1000).toInt()
+    
+    fun toggleRunning() {
+        persistentState.clearAutoPauseFlags()
+        when (_statusFlow.value) {
+            TimeTrackingStatus.RUNNING, TimeTrackingStatus.IDLE -> setStatus(TimeTrackingStatus.STOPPED)
+            TimeTrackingStatus.STOPPED -> setStatus(TimeTrackingStatus.RUNNING)
+        }
+    }
+    
+    fun setStatus(status: TimeTrackingStatus) {
+        val now = System.currentTimeMillis()
+        
+        _statusFlow.value = status
+        persistentState.setStatus(status)
+        persistentState.setLastUpdateTimestamp(now)
+        
+        if (status == TimeTrackingStatus.RUNNING) {
+            startTicking()
+        } else {
+            stopTicking()
+        }
+        
+        lastTickTime = now
+    }
+    
     fun pause() {
-        synchronized(this) {
-            persistentState.clearAutoPauseFlags() // Clear auto-pause flags on manual pause
-            if (persistentState.getStatus() == TimeTrackingStatus.RUNNING) {
-                setStatus(TimeTrackingStatus.IDLE)
-            }
+        persistentState.clearAutoPauseFlags()
+        if (_statusFlow.value == TimeTrackingStatus.RUNNING) {
+            setStatus(TimeTrackingStatus.IDLE)
         }
     }
     
-    /**
-     * Resume the timer from IDLE state.
-     */
     fun resume() {
-        synchronized(this) {
-            if (persistentState.getStatus() == TimeTrackingStatus.IDLE) {
-                setStatus(TimeTrackingStatus.RUNNING)
-            }
-        }
-    }
-    
-    /**
-     * Start or resume the timer.
-     */
-    fun start() {
-        synchronized(this) {
-            persistentState.clearAutoPauseFlags() // Clear auto-pause flags on manual start
+        if (_statusFlow.value == TimeTrackingStatus.IDLE) {
             setStatus(TimeTrackingStatus.RUNNING)
         }
     }
     
-    /**
-     * Stop the timer.
-     */
-    fun stop() {
-        synchronized(this) {
-            persistentState.clearAutoPauseFlags() // Clear auto-pause flags on manual stop
-            setStatus(TimeTrackingStatus.STOPPED)
-        }
-    }
-    
-    /**
-     * Auto-pause timer when window loses focus.
-     * Only pauses if currently running.
-     */
-    fun autoPauseByFocus() {
-        autoPause { persistentState.setAutoPausedByFocus(true) }
-    }
-    
-    /**
-     * Auto-resume timer when window gains focus.
-     * Only resumes if it was auto-paused by focus loss.
-     */
-    fun autoResumeFromFocus() {
-        synchronized(this) {
-            if (persistentState.isAutoPausedByFocus() && 
-                persistentState.getStatus() == TimeTrackingStatus.IDLE) {
-                persistentState.setAutoPausedByFocus(false)
-                setStatus(TimeTrackingStatus.RUNNING)
-            }
-        }
-    }
-    
-    /**
-     * Auto-pause timer when switching projects.
-     * Only pauses if currently running.
-     */
-    fun autoPauseByProjectSwitch() {
-        autoPause { persistentState.setAutoPausedByProjectSwitch(true) }
-    }
-    
-    /**
-     * Common auto-pause logic.
-     * Only pauses if timer is currently running.
-     */
-    private fun autoPause(setFlag: () -> Unit) {
-        synchronized(this) {
-            if (persistentState.getStatus() == TimeTrackingStatus.RUNNING) {
-                setFlag()
-                setStatus(TimeTrackingStatus.IDLE)
-            }
-        }
-    }
-    
-    /**
-     * Reset the timer to zero.
-     */
     fun reset() {
-        synchronized(this) {
-            persistentState.reset()
-            persistentState.clearAutoPauseFlags()
-        }
-        widget?.repaint()
+        stopTicking()
+        _timeFlow.value = 0L
+        persistentState.reset()
+        persistentState.clearAutoPauseFlags()
+        setStatus(TimeTrackingStatus.STOPPED)
     }
     
-    /**
-     * Manually add time in milliseconds.
-     */
     fun addTimeMs(timeMs: Long) {
-        synchronized(this) {
-            persistentState.addTimeMs(timeMs)
-            widget?.repaint()
+        val newTime = _timeFlow.value + timeMs
+        _timeFlow.value = newTime
+        persistentState.setTotalTimeMs(newTime)
+    }
+    
+    fun autoPauseByFocus() {
+        if (_statusFlow.value == TimeTrackingStatus.RUNNING) {
+            persistentState.setAutoPausedByFocus(true)
+            setStatus(TimeTrackingStatus.IDLE)
         }
     }
     
-    /**
-     * Set the total time in milliseconds.
-     */
-    fun setTotalTimeMs(timeMs: Long) {
-        synchronized(this) {
-            persistentState.setTotalTimeMs(timeMs)
-            widget?.repaint()
+    fun autoResumeFromFocus() {
+        if (persistentState.isAutoPausedByFocus() && _statusFlow.value == TimeTrackingStatus.IDLE) {
+            persistentState.setAutoPausedByFocus(false)
+            setStatus(TimeTrackingStatus.RUNNING)
         }
     }
     
-    /**
-     * Get a reference to the widget.
-     */
-    fun widget(): JiraWorklogWidget {
-        if (widget == null) {
-            widget = JiraWorklogWidget(this, project)
+    fun autoPauseByProjectSwitch() {
+        if (_statusFlow.value == TimeTrackingStatus.RUNNING) {
+            persistentState.setAutoPausedByProjectSwitch(true)
+            setStatus(TimeTrackingStatus.IDLE)
         }
-        return widget!!
     }
     
-    /**
-     * Dispose of resources.
-     */
     fun dispose() {
-        tickFuture?.cancel(false)
+        job.cancel()
     }
 }

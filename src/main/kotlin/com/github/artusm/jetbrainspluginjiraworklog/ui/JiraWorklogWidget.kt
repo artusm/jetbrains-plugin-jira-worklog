@@ -1,5 +1,6 @@
 package com.github.artusm.jetbrainspluginjiraworklog.ui
 
+import com.github.artusm.jetbrainspluginjiraworklog.config.JiraWorklogConfigurable
 import com.github.artusm.jetbrainspluginjiraworklog.model.TimeTrackingStatus
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
 import com.github.artusm.jetbrainspluginjiraworklog.utils.TimeFormatter
@@ -14,6 +15,8 @@ import com.intellij.ui.JBColor
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
 import org.jetbrains.annotations.NotNull
 import java.awt.*
 import java.awt.event.MouseAdapter
@@ -51,11 +54,13 @@ class JiraWorklogWidget(
     }
 
     private var mouseInside = false
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    // Local state for painting
+    private var currentTimeMs: Long = 0
+    private var currentStatus: TimeTrackingStatus = TimeTrackingStatus.STOPPED
 
     init {
-        // Register with service
-        service.registerWidget(this)
-        
         // Configure button
         border = JBUI.CurrentTheme.StatusBar.Widget.border()
         isOpaque = false
@@ -77,6 +82,26 @@ class JiraWorklogWidget(
                 handleClick(e)
             }
         })
+        
+        // Observe service
+        observeService()
+    }
+    
+    private fun observeService() {
+        scope.launch {
+            launch {
+                service.timeFlow.collectLatest { time ->
+                    currentTimeMs = time
+                    repaint()
+                }
+            }
+            launch {
+                service.statusFlow.collectLatest { status ->
+                    currentStatus = status
+                    repaint()
+                }
+            }
+        }
     }
 
     private fun handleClick(e: MouseEvent) {
@@ -135,7 +160,7 @@ class JiraWorklogWidget(
 
     private fun showSettings() {
         com.intellij.openapi.options.ShowSettingsUtil.getInstance()
-            .showSettingsDialog(project, com.github.artusm.jetbrainspluginjiraworklog.config.JiraWorklogConfigurable::class.java)
+            .showSettingsDialog(project, JiraWorklogConfigurable::class.java)
     }
 
     override fun ID(): String = ID
@@ -145,14 +170,13 @@ class JiraWorklogWidget(
     }
 
     override fun dispose() {
-        // Cleanup if needed
+        scope.cancel()
     }
 
     override fun getComponent(): JButton = this
 
     override fun paintComponent(g: Graphics) {
-        val timeToShow = service.getTotalTimeMs()
-        val info = TimeFormatter.formatDisplay(timeToShow)
+        val info = TimeFormatter.formatDisplay(currentTimeMs)
 
         val size = getSize()
         val insets = getInsets()
@@ -163,15 +187,14 @@ class JiraWorklogWidget(
         val xOffset = insets.left
 
         // Set background color based on status
-        val status = service.getStatus()
         if (mouseInside) {
-            g.color = if (status == TimeTrackingStatus.RUNNING) {
+            g.color = if (currentStatus == TimeTrackingStatus.RUNNING) {
                 COLOR_MENU_ON
             } else {
                 COLOR_MENU_OFF
             }
         } else {
-            g.color = when (status) {
+            g.color = when (currentStatus) {
                 TimeTrackingStatus.RUNNING -> COLOR_ON
                 TimeTrackingStatus.IDLE -> COLOR_IDLE
                 TimeTrackingStatus.STOPPED -> COLOR_OFF
@@ -191,7 +214,7 @@ class JiraWorklogWidget(
             g.drawLine(xOffset + sectionWidth * 2, yOffset, xOffset + sectionWidth * 2, yOffset + barHeight)
             
             // First icon: Start/Stop
-            val firstIcon = if (status == TimeTrackingStatus.RUNNING) STOP_ICON else START_ICON
+            val firstIcon = if (currentStatus == TimeTrackingStatus.RUNNING) STOP_ICON else START_ICON
             firstIcon.paintIcon(
                 this, g,
                 xOffset + (sectionWidth - firstIcon.iconWidth) / 2,

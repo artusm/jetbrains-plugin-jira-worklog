@@ -2,6 +2,7 @@ package com.github.artusm.jetbrainspluginjiraworklog.git
 
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState
+import com.github.artusm.jetbrainspluginjiraworklog.data.JiraWorklogRepository
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
@@ -42,7 +43,6 @@ class BranchChangeListener : GitRepositoryChangeListener {
 
     private fun onBranchChanged(project: Project, repository: GitRepository, newBranchName: String?) {
         val settings = JiraSettings.getInstance()
-        val persistentState = project.service<JiraWorklogPersistentState>()
         
         // Auto-pause timer if enabled in settings
         if (settings.isPauseOnBranchChange()) {
@@ -51,21 +51,22 @@ class BranchChangeListener : GitRepositoryChangeListener {
         }
         
         // Restore saved ticket for current branch, or use fallback
+        // We use the Repository to handle this logic centrally
         newBranchName?.let { branch ->
-            val savedIssue = persistentState.getIssueForBranch(branch)
+            val worklogRepo = project.service<JiraWorklogRepository>()
             
-            if (savedIssue != null) {
-                // Branch has saved ticket - use it
-                persistentState.setLastIssueKey(savedIssue)
-            } else {
-                // No saved ticket - lastIssueKey will be used as fallback in UI
-                // User can explicitly save by selecting an issue in the popup
+            // This will look up the saved issue for the branch, or fallback to global last used
+            val issueKeysToRestore = worklogRepo.getSavedIssueKey(branch)
+            
+            if (issueKeysToRestore != null) {
+                // Ensure the global "last used" is updated to match the branch's selection
+                worklogRepo.saveSelectedIssue(issueKeysToRestore, branch)
             }
         }
         
         // Periodically clean up deleted branches (every 10th branch change)
         if (shouldCleanupDeletedBranches()) {
-            cleanupDeletedBranches(persistentState, project)
+            cleanupDeletedBranches(project)
         }
     }
     
@@ -75,10 +76,8 @@ class BranchChangeListener : GitRepositoryChangeListener {
         return branchChangeCount.incrementAndGet() % CLEANUP_INTERVAL == 0
     }
     
-    private fun cleanupDeletedBranches(
-        persistentState: JiraWorklogPersistentState,
-        project: Project
-    ) {
+    private fun cleanupDeletedBranches(project: Project) {
+        val persistentState = project.service<JiraWorklogPersistentState>()
         val activeBranches = git4idea.repo.GitRepositoryManager.getInstance(project).repositories
             .flatMap { it.branches.localBranches + it.branches.remoteBranches }
             .map { it.name }

@@ -12,7 +12,7 @@ import com.intellij.openapi.components.*
     name = "JiraWorklogPersistentState",
     storages = [Storage(StoragePathMacros.WORKSPACE_FILE)]
 )
-class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersistentState.State> {
+open class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersistentState.State> {
     
     private var state = State()
 
