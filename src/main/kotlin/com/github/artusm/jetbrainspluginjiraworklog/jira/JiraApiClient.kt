@@ -1,13 +1,11 @@
 package com.github.artusm.jetbrainspluginjiraworklog.jira
 
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraConfig
-import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.github.artusm.jetbrainspluginjiraworklog.utils.TimeFormatter
 import com.intellij.openapi.diagnostic.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -15,7 +13,6 @@ import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import java.util.*
 
 /**
  * HTTP client for Jira REST API v2.

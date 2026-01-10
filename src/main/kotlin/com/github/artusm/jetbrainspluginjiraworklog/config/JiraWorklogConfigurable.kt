@@ -3,7 +3,6 @@ package com.github.artusm.jetbrainspluginjiraworklog.config
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraApiClient
 import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.intellij.icons.AllIcons
-import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
