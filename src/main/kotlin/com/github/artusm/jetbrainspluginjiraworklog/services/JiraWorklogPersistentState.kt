@@ -96,6 +96,15 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
         state.lastIssueKey = issueKey
     }
     
+    /**
+     * Clean up issue mappings for branches that no longer exist.
+     * Keeps only branches that are in the provided set of active branch names.
+     */
+    fun cleanupDeletedBranches(activeBranchNames: Set<String>) {
+        val keysToRemove = state.branchToIssueMap.keys.filter { it !in activeBranchNames }
+        keysToRemove.forEach { state.branchToIssueMap.remove(it) }
+    }
+    
     fun reset() {
         state.totalTimeMs = 0L
         state.status = TimeTrackingStatus.STOPPED.name
