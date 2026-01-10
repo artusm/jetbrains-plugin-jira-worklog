@@ -366,7 +366,7 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
                                 MyBundle.message("onboarding.error.tip.timeout")
                             else -> ""
                         }
-                        showFeedback(MyBundle.message("onboarding.error.failed", errorMsg) + troubleshooting, true)
+                        showFeedback(MyBundle.message("onboarding.error.failed", errorMsg, troubleshooting), true)
                     }
                 }
             }
