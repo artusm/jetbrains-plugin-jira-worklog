@@ -36,7 +36,9 @@ class BranchChangeListener : GitRepositoryChangeListener {
     private fun onBranchChanged(project: Project, repository: GitRepository) {
         val settings = JiraSettings.getInstance()
         val persistentState = project.service<JiraWorklogPersistentState>()
-        val currentBranch = lastBranchName
+        
+        // Get the NEW branch name (not the old one!)
+        val newBranchName = getBranchName(repository)
         
         // Auto-pause timer if enabled in settings
         if (settings.isPauseOnBranchChange()) {
@@ -45,7 +47,7 @@ class BranchChangeListener : GitRepositoryChangeListener {
         }
         
         // Restore saved ticket for current branch, or use fallback
-        currentBranch?.let { branch ->
+        newBranchName?.let { branch ->
             val savedIssue = persistentState.getIssueForBranch(branch)
             
             if (savedIssue != null) {
