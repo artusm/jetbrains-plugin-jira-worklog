@@ -31,4 +31,22 @@ class JiraWorklogPersistentStateTest {
         deserializedState.branchToIssueMap["new-branch"] = "JIRA-999"
         assertEquals("JIRA-999", deserializedState.branchToIssueMap["new-branch"])
     }
+
+    @Test
+    fun testCleanupDeletedBranches() {
+        val service = JiraWorklogPersistentState()
+        service.saveIssueForBranch("feature/active", "JIRA-100")
+        service.saveIssueForBranch("feature/deleted", "JIRA-200")
+        service.saveIssueForBranch("detached:abc1234", "JIRA-300")
+        service.saveIssueForBranch("detached", "JIRA-400")
+
+        // Act: Cleanup with only "feature/active" being valid
+        service.cleanupDeletedBranches(setOf("feature/active"))
+
+        // Assert
+        assertEquals("JIRA-100", service.getIssueForBranch("feature/active"))
+        assertEquals(null, service.getIssueForBranch("feature/deleted"))
+        assertEquals("JIRA-300", service.getIssueForBranch("detached:abc1234"))
+        assertEquals("JIRA-400", service.getIssueForBranch("detached"))
+    }
 }

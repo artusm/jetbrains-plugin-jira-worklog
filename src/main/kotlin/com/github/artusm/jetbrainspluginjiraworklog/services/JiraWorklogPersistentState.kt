@@ -90,9 +90,11 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
     fun saveIssueForBranch(branchName: String, issueKey: String) {
         state.branchToIssueMap[branchName] = issueKey
     }
-    
+
+    @Synchronized
     fun getLastIssueKey(): String? = state.lastIssueKey
-    
+
+    @Synchronized
     fun setLastIssueKey(issueKey: String?) {
         state.lastIssueKey = issueKey
     }
@@ -106,7 +108,7 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
         val iterator = state.branchToIssueMap.iterator()
         while (iterator.hasNext()) {
             val entry = iterator.next()
-            if (entry.key !in activeBranchNames) {
+            if (entry.key !in activeBranchNames && !entry.key.startsWith("detached")) {
                 iterator.remove()
             }
         }

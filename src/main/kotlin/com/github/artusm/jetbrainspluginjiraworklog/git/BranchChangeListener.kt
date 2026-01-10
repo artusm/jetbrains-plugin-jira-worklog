@@ -66,7 +66,7 @@ class BranchChangeListener : GitRepositoryChangeListener {
         
         // Periodically clean up deleted branches (every 10th branch change)
         if (shouldCleanupDeletedBranches()) {
-            cleanupDeletedBranches(persistentState, project, repository)
+            cleanupDeletedBranches(persistentState, project)
         }
     }
     
@@ -78,8 +78,7 @@ class BranchChangeListener : GitRepositoryChangeListener {
     
     private fun cleanupDeletedBranches(
         persistentState: JiraWorklogPersistentState,
-        project: Project,
-        repository: GitRepository
+        project: Project
     ) {
         val activeBranches = git4idea.repo.GitRepositoryManager.getInstance(project).repositories
             .flatMap { it.branches.localBranches + it.branches.remoteBranches }
@@ -88,6 +87,4 @@ class BranchChangeListener : GitRepositoryChangeListener {
 
         persistentState.cleanupDeletedBranches(activeBranches)
     }
-
-
 }
