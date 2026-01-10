@@ -58,11 +58,8 @@ class BranchChangeListener : GitRepositoryChangeListener {
                 // Branch has saved ticket - use it
                 persistentState.setLastIssueKey(savedIssue)
             } else {
-                // No saved ticket - use fallback from last issue
-                persistentState.getLastIssueKey()?.let { lastIssue ->
-                    // Save the fallback issue for this new branch
-                    persistentState.saveIssueForBranch(branch, lastIssue)
-                }
+                // No saved ticket - lastIssueKey will be used as fallback in UI
+                // User can explicitly save by selecting an issue in the popup
             }
         }
         
