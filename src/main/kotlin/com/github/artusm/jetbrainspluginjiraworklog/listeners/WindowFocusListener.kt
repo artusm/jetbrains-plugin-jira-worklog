@@ -47,11 +47,10 @@ class WindowFocusListener : ApplicationActivationListener, ProjectManagerListene
             lastActiveProject = currentProject
         }
         
-        // Handle window focus gain auto-resume
-        if (settings.isPauseOnFocusLoss()) {
-            forEachOpenProject { timerService ->
-                timerService.autoResumeFromFocus()
-            }
+        // Handle window focus gain auto-resume (only for current project)
+        if (settings.isPauseOnFocusLoss() && currentProject != null && !currentProject.isDisposed) {
+            val timerService = currentProject.getService(JiraWorklogTimerService::class.java)
+            timerService?.autoResumeFromFocus()
         }
     }
     
