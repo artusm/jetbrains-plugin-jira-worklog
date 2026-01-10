@@ -1,5 +1,6 @@
 package com.github.artusm.jetbrainspluginjiraworklog.services
 
+import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.model.TimeTrackingStatus
 import com.github.artusm.jetbrainspluginjiraworklog.ui.JiraWorklogWidget
 import com.intellij.openapi.components.Service
@@ -16,7 +17,13 @@ import java.util.concurrent.TimeUnit
 @Service(Service.Level.PROJECT)
 class JiraWorklogTimerService(private val project: Project) {
     
+    companion object {
+        // Consider system asleep if tick gap exceeds 5 seconds
+        private const val SLEEP_DETECTION_THRESHOLD_MS = 5000L
+    }
+    
     private val persistentState: JiraWorklogPersistentState = project.service()
+    private val settings: JiraSettings = JiraSettings.getInstance()
     private var widget: JiraWorklogWidget? = null
     
     private var tickFuture: ScheduledFuture<*>? = null
@@ -52,21 +59,50 @@ class JiraWorklogTimerService(private val project: Project) {
     
     /**
      * Called every second to update the timer.
+     * Also detects system sleep via abnormal time gaps.
      */
     private fun tick() {
         val now = System.currentTimeMillis()
         val elapsed = now - lastTickTime
+        
+        // Check for abnormal time gap indicating system sleep
+        if (elapsed > SLEEP_DETECTION_THRESHOLD_MS && settings.isPauseOnSystemSleep()) {
+            handleSystemSleep(elapsed)
+        }
+        
         lastTickTime = now
         
         synchronized(this) {
             val status = persistentState.getStatus()
             
             if (status == TimeTrackingStatus.RUNNING) {
-                persistentState.addTimeMs(elapsed)
+                // Don't add time if we just recovered from sleep
+                // (elapsed would be huge, we only want to add real working time)
+                val timeToAdd = if (elapsed > SLEEP_DETECTION_THRESHOLD_MS) {
+                    0L // Don't count sleep time
+                } else {
+                    elapsed
+                }
+                
+                persistentState.addTimeMs(timeToAdd)
                 persistentState.setLastUpdateTimestamp(now)
                 
                 // Update widget on EDT
                 widget?.repaint()
+            }
+        }
+    }
+    
+    /**
+     * Handle system sleep detection.
+     * Automatically pauses the timer when a large time gap is detected.
+     */
+    private fun handleSystemSleep(sleepDurationMs: Long) {
+        synchronized(this) {
+            if (persistentState.getStatus() == TimeTrackingStatus.RUNNING) {
+                setStatus(TimeTrackingStatus.IDLE)
+                // Log for debugging (user can see this in IDE logs)
+                println("Jira Worklog Timer: System sleep detected (${sleepDurationMs}ms gap), timer paused")
             }
         }
     }

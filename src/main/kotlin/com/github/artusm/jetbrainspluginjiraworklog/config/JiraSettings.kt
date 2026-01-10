@@ -28,7 +28,10 @@ class JiraSettings : PersistentStateComponent<JiraSettings.State> {
         var pauseOnBranchChange: Boolean = true,
         
         /** Auto-pause when switching to different project */
-        var pauseOnProjectSwitch: Boolean = true
+        var pauseOnProjectSwitch: Boolean = true,
+        
+        /** Auto-pause when system goes to sleep */
+        var pauseOnSystemSleep: Boolean = true
     )
     
     companion object {
@@ -82,6 +85,12 @@ class JiraSettings : PersistentStateComponent<JiraSettings.State> {
     
     fun setPauseOnProjectSwitch(enabled: Boolean) {
         state.pauseOnProjectSwitch = enabled
+    }
+    
+    fun isPauseOnSystemSleep(): Boolean = state.pauseOnSystemSleep
+    
+    fun setPauseOnSystemSleep(enabled: Boolean) {
+        state.pauseOnSystemSleep = enabled
     }
     
     // Check if credentials are configured

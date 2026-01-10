@@ -32,6 +32,7 @@ class JiraWorklogConfigurable : Configurable {
     private var pauseOnFocusCheckbox: JBCheckBox? = null
     private var pauseOnBranchCheckbox: JBCheckBox? = null
     private var pauseOnProjectCheckbox: JBCheckBox? = null
+    private var pauseOnSystemSleepCheckbox: JBCheckBox? = null
     private var testConnectionButton: JButton? = null
     private var connectionStatusLabel: JBLabel? = null
     
@@ -169,6 +170,11 @@ class JiraWorklogConfigurable : Configurable {
         pauseOnProjectCheckbox = JBCheckBox("Pause timer when switching projects", settings.isPauseOnProjectSwitch())
         pauseOnProjectCheckbox?.alignmentX = Component.LEFT_ALIGNMENT
         panel.add(pauseOnProjectCheckbox)
+        panel.add(Box.createVerticalStrut(8))
+        
+        pauseOnSystemSleepCheckbox = JBCheckBox("Pause timer when system goes to sleep (Mac/Linux/Windows)", settings.isPauseOnSystemSleep())
+        pauseOnSystemSleepCheckbox?.alignmentX = Component.LEFT_ALIGNMENT
+        panel.add(pauseOnSystemSleepCheckbox)
         
         return panel
     }
@@ -207,7 +213,8 @@ class JiraWorklogConfigurable : Configurable {
                 String(tokenField?.password ?: charArrayOf()) != (settings.getPersonalAccessToken() ?: "") ||
                 pauseOnFocusCheckbox?.isSelected != settings.isPauseOnFocusLoss() ||
                 pauseOnBranchCheckbox?.isSelected != settings.isPauseOnBranchChange() ||
-                pauseOnProjectCheckbox?.isSelected != settings.isPauseOnProjectSwitch()
+                pauseOnProjectCheckbox?.isSelected != settings.isPauseOnProjectSwitch() ||
+                pauseOnSystemSleepCheckbox?.isSelected != settings.isPauseOnSystemSleep()
     }
     
     override fun apply() {
@@ -216,6 +223,7 @@ class JiraWorklogConfigurable : Configurable {
         settings.setPauseOnFocusLoss(pauseOnFocusCheckbox?.isSelected ?: true)
         settings.setPauseOnBranchChange(pauseOnBranchCheckbox?.isSelected ?: true)
         settings.setPauseOnProjectSwitch(pauseOnProjectCheckbox?.isSelected ?: true)
+        settings.setPauseOnSystemSleep(pauseOnSystemSleepCheckbox?.isSelected ?: true)
         
         // Hide status label after applying
         connectionStatusLabel?.isVisible = false
@@ -227,6 +235,7 @@ class JiraWorklogConfigurable : Configurable {
         pauseOnFocusCheckbox?.isSelected = settings.isPauseOnFocusLoss()
         pauseOnBranchCheckbox?.isSelected = settings.isPauseOnBranchChange()
         pauseOnProjectCheckbox?.isSelected = settings.isPauseOnProjectSwitch()
+        pauseOnSystemSleepCheckbox?.isSelected = settings.isPauseOnSystemSleep()
         
         // Hide status label on reset
         connectionStatusLabel?.isVisible = false
