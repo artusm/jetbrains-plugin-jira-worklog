@@ -2,6 +2,7 @@ package com.github.artusm.jetbrainspluginjiraworklog.startup
 
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.onboarding.OnboardingDialog
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 
@@ -15,8 +16,13 @@ class OnboardingStartupActivity : ProjectActivity {
         val settings = JiraSettings.getInstance()
         
         // Show onboarding dialog if credentials are not configured
+        // Must be invoked on EDT since DialogWrapper requires it
         if (!settings.hasCredentials()) {
-            OnboardingDialog.show(project)
+            ApplicationManager.getApplication().invokeLater {
+                if (!project.isDisposed) {
+                    OnboardingDialog.show(project)
+                }
+            }
         }
     }
 }
