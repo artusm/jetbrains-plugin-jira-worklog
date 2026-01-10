@@ -16,6 +16,11 @@ class WindowFocusListener : ApplicationActivationListener, ProjectManagerListene
     
     private var lastActiveProject: Project? = null
     
+    /**
+     * Pauses Jira worklog timers for all open projects when the IDE window loses focus and the corresponding setting is enabled.
+     *
+     * @param ideFrame The IDE frame that was deactivated. 
+     */
     override fun applicationDeactivated(ideFrame: IdeFrame) {
         val settings = JiraSettings.getInstance()
         
@@ -27,6 +32,13 @@ class WindowFocusListener : ApplicationActivationListener, ProjectManagerListene
         }
     }
     
+    /**
+     * Reacts to IDE window activation by pausing or resuming Jira worklog timers according to user settings.
+     *
+     * If "pause on project switch" is enabled and the activated frame has a project, pauses the timer for the previously tracked project when it differs from the current one and is not disposed, then updates the tracked last active project. If "pause on focus loss" is enabled, resumes timers for all open projects.
+     *
+     * @param ideFrame The activated IDE frame (may contain the currently focused project).
+     */
     override fun applicationActivated(ideFrame: IdeFrame) {
         val settings = JiraSettings.getInstance()
         val currentProject = ideFrame.project
@@ -55,6 +67,11 @@ class WindowFocusListener : ApplicationActivationListener, ProjectManagerListene
         }
     }
     
+    /**
+     * Clears internal last-active project tracking if the specified project was the last active one.
+     *
+     * @param project The project that was closed.
+     */
     override fun projectClosed(project: Project) {
         // Clear tracking if the closed project was the last active one
         if (lastActiveProject == project) {
@@ -63,7 +80,9 @@ class WindowFocusListener : ApplicationActivationListener, ProjectManagerListene
     }
     
     /**
-     * Helper function to execute an action on all open projects' timer services.
+     * Execute the given action for each open project's JiraWorklogTimerService.
+     *
+     * @param action Function invoked with the project's JiraWorklogTimerService for every open, non-disposed project that provides the service; projects without the service are skipped.
      */
     private fun forEachOpenProject(action: (JiraWorklogTimerService) -> Unit) {
         val projectManager = ProjectManager.getInstance()

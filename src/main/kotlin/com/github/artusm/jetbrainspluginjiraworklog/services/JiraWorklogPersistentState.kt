@@ -28,7 +28,12 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
         var autoPausedByProjectSwitch: Boolean = false
     )
 
-    override fun getState(): State = state
+    /**
+ * Provide the current in-memory persistent state for the component.
+ *
+ * @return The current `State` instance used for persistence. 
+ */
+override fun getState(): State = state
 
     override fun loadState(state: State) {
         this.state = state
@@ -58,28 +63,63 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
     
     fun getLastUpdateTimestamp(): Long = state.lastUpdateTimestamp
     
+    /**
+     * Updates the stored last-update timestamp for the worklog state.
+     *
+     * @param timestamp The timestamp to store, in milliseconds since the Unix epoch.
+     */
     fun setLastUpdateTimestamp(timestamp: Long) {
         state.lastUpdateTimestamp = timestamp
     }
     
-    // Auto-pause state management
+    /**
+ * Indicates whether time tracking is currently auto-paused because the IDE lost focus.
+ *
+ * @return `true` if tracking is auto-paused due to focus loss, `false` otherwise.
+ */
     fun isAutoPausedByFocus(): Boolean = state.autoPausedByFocus
     
+    /**
+     * Sets whether the timer was automatically paused due to IDE focus loss.
+     *
+     * @param paused `true` to mark the timer as auto-paused because the IDE lost focus, `false` to clear the flag.
+     */
     fun setAutoPausedByFocus(paused: Boolean) {
         state.autoPausedByFocus = paused
     }
     
-    fun isAutoPausedByProjectSwitch(): Boolean = state.autoPausedByProjectSwitch
+    /**
+ * Indicates whether the timer is currently auto-paused because the project was switched.
+ *
+ * @return `true` if the timer was auto-paused due to a project switch, `false` otherwise.
+ */
+fun isAutoPausedByProjectSwitch(): Boolean = state.autoPausedByProjectSwitch
     
+    /**
+     * Sets whether the timer was auto-paused due to a project switch.
+     *
+     * @param paused `true` to mark the timer as auto-paused by a project switch, `false` to clear the flag.
+     */
     fun setAutoPausedByProjectSwitch(paused: Boolean) {
         state.autoPausedByProjectSwitch = paused
     }
     
+    /**
+     * Clears the auto-pause state.
+     *
+     * Resets both `autoPausedByFocus` and `autoPausedByProjectSwitch` to `false`.
+     */
     fun clearAutoPauseFlags() {
         state.autoPausedByFocus = false
         state.autoPausedByProjectSwitch = false
     }
     
+    /**
+     * Reset the persistent timer state to its initial values.
+     *
+     * Resets accumulated time to 0, sets the status to `STOPPED`, clears the last update timestamp,
+     * and clears both auto-pause flags.
+     */
     fun reset() {
         state.totalTimeMs = 0L
         state.status = TimeTrackingStatus.STOPPED.name

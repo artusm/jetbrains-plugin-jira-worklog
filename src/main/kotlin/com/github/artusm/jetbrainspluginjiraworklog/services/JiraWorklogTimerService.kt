@@ -126,7 +126,9 @@ class JiraWorklogTimerService(private val project: Project) {
     }
     
     /**
-     * Get total accumulated time in milliseconds.
+     * Total accumulated time tracked by the service in milliseconds.
+     *
+     * @return The total accumulated time in milliseconds.
      */
     fun getTotalTimeMs(): Long {
         return synchronized(this) {
@@ -135,7 +137,10 @@ class JiraWorklogTimerService(private val project: Project) {
     }
     
     /**
-     * Toggle between running and stopped.
+     * Toggle the timer between running and stopped states.
+     *
+     * If the current status is `RUNNING` or `IDLE`, sets the status to `STOPPED`; if it is `STOPPED`, sets the status to `RUNNING`.
+     * Clears any auto-pause flags when invoked.
      */
     fun toggleRunning() {
         synchronized(this) {
@@ -169,7 +174,9 @@ class JiraWorklogTimerService(private val project: Project) {
     }
     
     /**
-     * Pause the timer (set to IDLE state).
+     * Pause the timer and put it into the IDLE state.
+     *
+     * Clears any auto-pause flags and, if the timer is currently RUNNING, transitions it to IDLE.
      */
     fun pause() {
         synchronized(this) {
@@ -181,7 +188,9 @@ class JiraWorklogTimerService(private val project: Project) {
     }
     
     /**
-     * Resume the timer from IDLE state.
+     * Resume timing when currently paused by setting the status to RUNNING.
+     *
+     * If the current status is not IDLE, this has no effect.
      */
     fun resume() {
         synchronized(this) {
@@ -192,7 +201,9 @@ class JiraWorklogTimerService(private val project: Project) {
     }
     
     /**
-     * Start or resume the timer.
+     * Starts or resumes time tracking for the current project.
+     *
+     * Clears any automatic pause flags set by focus or project-switch events and transitions the tracker to the RUNNING state.
      */
     fun start() {
         synchronized(this) {
@@ -202,7 +213,9 @@ class JiraWorklogTimerService(private val project: Project) {
     }
     
     /**
-     * Stop the timer.
+     * Stops the timer and marks time tracking as stopped.
+     *
+     * Clears any automatic-pause flags and sets the service status to STOPPED.
      */
     fun stop() {
         synchronized(this) {
@@ -212,16 +225,18 @@ class JiraWorklogTimerService(private val project: Project) {
     }
     
     /**
-     * Auto-pause timer when window loses focus.
-     * Only pauses if currently running.
+     * Triggers an automatic pause when the window loses focus.
+     *
+     * If the timer is currently running, records that it was auto-paused due to focus loss and transitions the timer to idle.
      */
     fun autoPauseByFocus() {
         autoPause { persistentState.setAutoPausedByFocus(true) }
     }
     
     /**
-     * Auto-resume timer when window gains focus.
-     * Only resumes if it was auto-paused by focus loss.
+     * Resumes the timer when the application window gains focus if it was previously auto-paused due to focus loss.
+     *
+     * If the timer is currently `IDLE` and marked as auto-paused by focus, clears that flag and transitions the timer to `RUNNING`.
      */
     fun autoResumeFromFocus() {
         synchronized(this) {
@@ -242,8 +257,11 @@ class JiraWorklogTimerService(private val project: Project) {
     }
     
     /**
-     * Common auto-pause logic.
-     * Only pauses if timer is currently running.
+     * Conditionally apply an automatic pause when the timer is currently running.
+     *
+     * If the timer status is RUNNING, executes the provided flag-setting lambda and transitions the timer to IDLE.
+     *
+     * @param setFlag A lambda that sets the appropriate auto-pause indicator (e.g., focus or project-switch flag).
      */
     private fun autoPause(setFlag: () -> Unit) {
         synchronized(this) {
@@ -255,7 +273,9 @@ class JiraWorklogTimerService(private val project: Project) {
     }
     
     /**
-     * Reset the timer to zero.
+     * Reset the accumulated time to zero, clear any auto-pause flags, and update the UI widget.
+     *
+     * Performs a synchronized reset of persistent state and clears auto-pause markers; repaints the widget if one is registered.
      */
     fun reset() {
         synchronized(this) {
