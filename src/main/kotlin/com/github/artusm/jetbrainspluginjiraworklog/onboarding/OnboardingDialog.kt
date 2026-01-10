@@ -17,6 +17,7 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import kotlinx.coroutines.runBlocking
 import java.awt.*
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
@@ -339,7 +340,9 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
                 indicator.isIndeterminate = true
                 
                 val client = JiraApiClient(settings)
-                result = client.testConnection()
+                result = runBlocking {
+                    client.testConnection()
+                }
             }
             
             override fun onSuccess() {
