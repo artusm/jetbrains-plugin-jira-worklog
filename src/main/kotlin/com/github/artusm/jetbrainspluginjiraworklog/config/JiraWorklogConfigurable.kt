@@ -5,11 +5,9 @@ import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.options.Configurable
-import com.intellij.openapi.progress.ProgressDescriptor
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
-import com.intellij.openapi.ui.Messages
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
@@ -18,6 +16,7 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.components.labels.LinkLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import kotlinx.coroutines.runBlocking
 import java.awt.*
 import javax.swing.*
 
