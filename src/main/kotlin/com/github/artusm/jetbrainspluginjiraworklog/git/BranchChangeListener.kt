@@ -1,6 +1,7 @@
 package com.github.artusm.jetbrainspluginjiraworklog.git
 
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
+import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
@@ -34,11 +35,30 @@ class BranchChangeListener : GitRepositoryChangeListener {
 
     private fun onBranchChanged(project: Project) {
         val settings = JiraSettings.getInstance()
+        val persistentState = project.service<JiraWorklogPersistentState>()
+        val currentBranch = lastBranchName
         
         // Auto-pause timer if enabled in settings
         if (settings.isPauseOnBranchChange()) {
             val timerService = project.service<JiraWorklogTimerService>()
             timerService.pause()
+        }
+        
+        // Restore saved ticket for current branch, or use fallback
+        if (currentBranch != null) {
+            val savedIssue = persistentState.getIssueForBranch(currentBranch)
+            
+            if (savedIssue != null) {
+                // Branch has saved ticket - use it
+                persistentState.setLastIssueKey(savedIssue)
+            } else {
+                // No saved ticket - use fallback from last issue
+                val lastIssue = persistentState.getLastIssueKey()
+                if (lastIssue != null) {
+                    // Save the fallback issue for this new branch
+                    persistentState.saveIssueForBranch(currentBranch, lastIssue)
+                }
+            }
         }
     }
 

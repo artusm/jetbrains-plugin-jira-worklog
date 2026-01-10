@@ -25,7 +25,10 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
         
         // Auto-pause state tracking
         var autoPausedByFocus: Boolean = false,
-        var autoPausedByProjectSwitch: Boolean = false
+        var autoPausedByProjectSwitch: Boolean = false,
+        
+        // Branch → Jira Issue Key mapping
+        var branchToIssueMap: MutableMap<String, String> = mutableMapOf()
     )
 
     override fun getState(): State = state
@@ -76,6 +79,21 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
     fun clearAutoPauseFlags() {
         state.autoPausedByFocus = false
         state.autoPausedByProjectSwitch = false
+    }
+    
+    // Branch-specific issue tracking
+    fun getIssueForBranch(branchName: String): String? {
+        return state.branchToIssueMap[branchName]
+    }
+    
+    fun saveIssueForBranch(branchName: String, issueKey: String) {
+        state.branchToIssueMap[branchName] = issueKey
+    }
+    
+    fun getLastIssueKey(): String? = state.lastIssueKey
+    
+    fun setLastIssueKey(issueKey: String?) {
+        state.lastIssueKey = issueKey
     }
     
     fun reset() {
