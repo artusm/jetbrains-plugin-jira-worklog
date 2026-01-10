@@ -317,8 +317,8 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         val projectRoot = project.basePath?.let { com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByPath(it) }
         val repository = projectRoot?.let { repoManager.getRepositoryForFile(it) }
         
-        return repository?.let { 
-             com.github.artusm.jetbrainspluginjiraworklog.git.GitUtils.getBranchNameOrRev(it)
+        return repository?.let {
+            com.github.artusm.jetbrainspluginjiraworklog.git.GitUtils.getBranchNameOrRev(it)
         }
     }
 
