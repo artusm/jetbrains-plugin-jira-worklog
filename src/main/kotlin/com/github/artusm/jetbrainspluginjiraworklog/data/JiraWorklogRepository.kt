@@ -13,7 +13,7 @@ import com.intellij.openapi.project.Project
 
 @Service(Service.Level.PROJECT)
 class JiraWorklogRepository(
-    private val project: Project?
+    private val project: Project
 ) : WorklogRepository {
 
     private val settings: JiraSettings get() = JiraSettings.getInstance()
@@ -22,7 +22,7 @@ class JiraWorklogRepository(
     private val api: JiraApi by lazy { JiraApiClient(settings) }
     
     private val persistentState: JiraWorklogPersistentState
-        get() = project?.service() ?: throw IllegalStateException("Project is null")
+        get() = project.service()
 
     /**
      * Search for issues assigned to the current user.

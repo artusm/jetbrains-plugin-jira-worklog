@@ -21,18 +21,24 @@ class CommitWorklogViewModelTest {
 
     @Before
     fun setup() {
-        fakeTimerService = FakeTimerService()
+        // Create instance-based state for isolation between tests
+        val state = JiraWorklogPersistentState().apply {
+            setStatus(TimeTrackingStatus.STOPPED)
+            setTotalTimeMs(5000L)
+        }
+        
+        fakeTimerService = FakeTimerService(state)
         
         val fakeApi = FakeJiraApi()
         
-        // Use fake state for setup
-        FakeTimerService.fakeState.saveIssueForBranch("feature/test", "JIRA-1")
-        FakeTimerService.fakeState.setLastIssueKey("JIRA-1")
+        // Use instance state for setup
+        state.saveIssueForBranch("feature/test", "JIRA-1")
+        state.setLastIssueKey("JIRA-1")
 
         // Create fake repository based on interface
         val realRepository = object : WorklogRepository {
              private val api = fakeApi
-             private val persistentState = FakeTimerService.fakeState
+             private val persistentState = state
              
              override suspend fun getAssignedIssues(): Result<JiraSearchResult> = api.searchAssignedIssues()
              override suspend fun getIssue(issueKey: String): Result<JiraIssue> = api.getIssueWithSubtasks(issueKey)
@@ -85,7 +91,12 @@ class CommitWorklogViewModelTest {
         }
 
         override suspend fun getIssueWithSubtasks(issueKey: String): Result<JiraIssue> {
-           return Result.success(issuesToReturn.firstOrNull { it.key == issueKey } ?: issuesToReturn.first())
+            val issue = issuesToReturn.firstOrNull { it.key == issueKey }
+            return if (issue != null) {
+                Result.success(issue)
+            } else {
+                Result.failure(NoSuchElementException("Issue not found: $issueKey"))
+            }
         }
 
         override suspend fun submitWorklog(issueKey: String, timeSpentSeconds: Int, comment: String?): Result<JiraWorklogResponse> {
@@ -97,19 +108,12 @@ class CommitWorklogViewModelTest {
         }
     }
 
-    class FakeTimerService : TimerService {
+    class FakeTimerService(private val state: JiraWorklogPersistentState) : TimerService {
         
-        companion object {
-            val fakeState = JiraWorklogPersistentState().apply {
-                setStatus(TimeTrackingStatus.STOPPED)
-                setTotalTimeMs(5000L)
-            }
-        }
-
-        private val _timeFlow = MutableStateFlow(fakeState.getTotalTimeMs())
+        private val _timeFlow = MutableStateFlow(state.getTotalTimeMs())
         override val timeFlow: StateFlow<Long> = _timeFlow.asStateFlow()
         
-        private val _statusFlow = MutableStateFlow(fakeState.getStatus())
+        private val _statusFlow = MutableStateFlow(state.getStatus())
         override val statusFlow: StateFlow<TimeTrackingStatus> = _statusFlow.asStateFlow()
 
         override fun getStatus(): TimeTrackingStatus = _statusFlow.value
@@ -121,11 +125,11 @@ class CommitWorklogViewModelTest {
         override fun resume() {}
         override fun reset() { 
             _timeFlow.value = 0L
-            fakeState.setTotalTimeMs(0L)
+            state.setTotalTimeMs(0L)
         }
         override fun addTimeMs(timeMs: Long) {
             _timeFlow.value += timeMs
-            fakeState.setTotalTimeMs(_timeFlow.value)
+            state.setTotalTimeMs(_timeFlow.value)
         }
         override fun autoPauseByFocus() {}
         override fun autoResumeFromFocus() {}

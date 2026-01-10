@@ -116,22 +116,28 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
                 
                 // Error Handling
                 if (state.error != null) {
-                    Messages.showErrorDialog(
-                        this@CommitWorklogPopupContent,
-                        state.error.message ?: MyBundle.message("error.general", "Unknown"),
-                        MyBundle.message("error.general.title")
-                    )
+                    val errorMessage = state.error.message ?: MyBundle.message("error.general", "Unknown")
                     viewModel.clearError()
+                    com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                        Messages.showErrorDialog(
+                            this@CommitWorklogPopupContent,
+                            errorMessage,
+                            MyBundle.message("error.general.title")
+                        )
+                    }
                 }
                 
                 // Success Handling
                 if (state.isSuccess) {
-                    Messages.showInfoMessage(
-                        this@CommitWorklogPopupContent,
-                        MyBundle.message("commit.success", TimeFormatter.formatJira(state.timeSpentMs), state.selectedIssue?.key ?: ""),
-                        MyBundle.message("commit.success.title")
-                    )
-                    popup?.cancel()
+                    val successMessage = MyBundle.message("commit.success", TimeFormatter.formatJira(state.timeSpentMs), state.selectedIssue?.key ?: "")
+                    com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                        Messages.showInfoMessage(
+                            this@CommitWorklogPopupContent,
+                            successMessage,
+                            MyBundle.message("commit.success.title")
+                        )
+                        popup?.cancel()
+                    }
                 }
                 
                 // Loading State
