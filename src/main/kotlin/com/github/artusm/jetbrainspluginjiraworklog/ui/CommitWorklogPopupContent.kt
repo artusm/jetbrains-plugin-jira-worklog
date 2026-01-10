@@ -309,6 +309,14 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
     }
     
     /**
+     * Helper to get the current branch name.
+     */
+    private fun getCurrentBranchName(): String? {
+        val repoManager = GitRepositoryManager.getInstance(project)
+        return repoManager.repositories.firstOrNull()?.currentBranch?.name
+    }
+
+    /**
      * Save selected issue for current branch
      */
     private fun saveSelectedIssueForCurrentBranch(issueKey: String) {
@@ -316,8 +324,7 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         persistentState.setLastIssueKey(issueKey)
 
         // Try to save per-branch if Git repo exists
-        val repoManager = GitRepositoryManager.getInstance(project)
-        repoManager.repositories.firstOrNull()?.currentBranch?.name?.let { branchName ->
+        getCurrentBranchName()?.let { branchName ->
             persistentState.saveIssueForBranch(branchName, issueKey)
         }
     }
@@ -326,8 +333,7 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
      * Get saved issue for current branch (with fallback to last issue)
      */
     private fun getSavedIssueForCurrentBranch(): String? {
-        val repoManager = GitRepositoryManager.getInstance(project)
-        val branchName = repoManager.repositories.firstOrNull()?.currentBranch?.name
+        val branchName = getCurrentBranchName()
         return branchName?.let { persistentState.getIssueForBranch(it) } ?: persistentState.getLastIssueKey()
     }
     
