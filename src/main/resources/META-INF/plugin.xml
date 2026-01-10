@@ -36,14 +36,14 @@
     </extensions>
     
     <applicationListeners>
-        <!-- Window Focus Listener for Auto-Pause -->
+        <!-- Window Focus and Project Switch Listener for Auto-Pause -->
         <listener class="com.github.artusm.jetbrainspluginjiraworklog.listeners.WindowFocusListener"
                   topic="com.intellij.openapi.application.ApplicationActivationListener"/>
     </applicationListeners>
     
     <projectListeners>
-        <!-- Project Switch Listener for Auto-Pause -->
-        <listener class="com.github.artusm.jetbrainspluginjiraworklog.listeners.ProjectSwitchListener"
+        <!-- Project Close Tracking -->
+        <listener class="com.github.artusm.jetbrainspluginjiraworklog.listeners.WindowFocusListener"
                   topic="com.intellij.openapi.project.ProjectManagerListener"/>
     </projectListeners>
 </idea-plugin>
