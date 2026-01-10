@@ -127,7 +127,7 @@ class JiraApiClient(private val settings: JiraConfig) : JiraApi {
         )
         
         val url = "$baseUrl/rest/api/2/issue/$issueKey/worklog"
-        val requestBody = json.encodeToString(request)
+        val requestBody = json.encodeToString(JiraWorklogRequest.serializer(), request)
         
         try {
             val response = executePost(url, token, requestBody)
