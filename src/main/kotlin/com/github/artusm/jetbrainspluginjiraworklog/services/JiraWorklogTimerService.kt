@@ -210,6 +210,46 @@ class JiraWorklogTimerService(private val project: Project) {
     }
     
     /**
+     * Auto-pause timer when window loses focus.
+     * Only pauses if currently running.
+     */
+    fun autoPauseByFocus() {
+        synchronized(this) {
+            if (persistentState.getStatus() == TimeTrackingStatus.RUNNING) {
+                persistentState.setAutoPausedByFocus(true)
+                setStatus(TimeTrackingStatus.IDLE)
+            }
+        }
+    }
+    
+    /**
+     * Auto-resume timer when window gains focus.
+     * Only resumes if it was auto-paused by focus loss.
+     */
+    fun autoResumeFromFocus() {
+        synchronized(this) {
+            if (persistentState.isAutoPausedByFocus() && 
+                persistentState.getStatus() == TimeTrackingStatus.IDLE) {
+                persistentState.setAutoPausedByFocus(false)
+                setStatus(TimeTrackingStatus.RUNNING)
+            }
+        }
+    }
+    
+    /**
+     * Auto-pause timer when switching projects.
+     * Only pauses if currently running.
+     */
+    fun autoPauseByProjectSwitch() {
+        synchronized(this) {
+            if (persistentState.getStatus() == TimeTrackingStatus.RUNNING) {
+                persistentState.setAutoPausedByProjectSwitch(true)
+                setStatus(TimeTrackingStatus.IDLE)
+            }
+        }
+    }
+    
+    /**
      * Reset the timer to zero.
      */
     fun reset() {

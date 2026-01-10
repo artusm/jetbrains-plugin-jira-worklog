@@ -34,4 +34,16 @@
         <!-- Git Repository Change Listener -->
         <gitRepositoryChangeListener implementation="com.github.artusm.jetbrainspluginjiraworklog.git.BranchChangeListener"/>
     </extensions>
+    
+    <applicationListeners>
+        <!-- Window Focus Listener for Auto-Pause -->
+        <listener class="com.github.artusm.jetbrainspluginjiraworklog.listeners.WindowFocusListener"
+                  topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+    </applicationListeners>
+    
+    <projectListeners>
+        <!-- Project Switch Listener for Auto-Pause -->
+        <listener class="com.github.artusm.jetbrainspluginjiraworklog.listeners.ProjectSwitchListener"
+                  topic="com.intellij.openapi.project.ProjectManagerListener"/>
+    </projectListeners>
 </idea-plugin>
