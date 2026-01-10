@@ -28,22 +28,19 @@ class BranchChangeListener : GitRepositoryChangeListener {
             return
         }
 
-        val branchName = getBranchName(repository)
+        val branchName = GitUtils.getBranchNameOrRev(repository)
         
         // Check if branch actually changed
         if (lastBranchName != null && lastBranchName != branchName) {
-            onBranchChanged(project, repository)
+            onBranchChanged(project, repository, branchName)
         }
         
         lastBranchName = branchName
     }
 
-    private fun onBranchChanged(project: Project, repository: GitRepository) {
+    private fun onBranchChanged(project: Project, repository: GitRepository, newBranchName: String?) {
         val settings = JiraSettings.getInstance()
         val persistentState = project.service<JiraWorklogPersistentState>()
-        
-        // Get the NEW branch name (not the old one!)
-        val newBranchName = getBranchName(repository)
         
         // Auto-pause timer if enabled in settings
         if (settings.isPauseOnBranchChange()) {
@@ -92,17 +89,5 @@ class BranchChangeListener : GitRepositoryChangeListener {
         persistentState.cleanupDeletedBranches(activeBranches)
     }
 
-    private fun getBranchName(repo: GitRepository): String? {
-        val currentBranch = repo.currentBranch
-        if (currentBranch != null) {
-            return currentBranch.name
-        }
-        
-        // Detached HEAD state - show short hash
-        val revision = repo.currentRevision
-        if (revision != null && revision.length > 7) {
-            return "detached:${revision.substring(0, 7)}"
-        }
-        return "detached"
-    }
+
 }

@@ -287,7 +287,7 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         return when (error) {
             is java.net.UnknownHostException -> MyBundle.message("error.unknown.host", host)
             is java.net.ConnectException -> MyBundle.message("error.connect")
-            is javax.net.ssl.SSLHandshakeException -> MyBundle.message("error.ssl")
+            is javax.net.ssl.SSLException -> MyBundle.message("error.ssl")
             is java.net.SocketTimeoutException -> MyBundle.message("error.timeout")
             is IllegalStateException -> MyBundle.message("error.config", error.message ?:"")
             else -> MyBundle.message("error.general", error?.message ?: "Unknown error")
@@ -313,7 +313,13 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
      */
     private fun getCurrentBranchName(): String? {
         val repoManager = GitRepositoryManager.getInstance(project)
-        return repoManager.repositories.firstOrNull()?.currentBranch?.name
+        // Try to get repository for the project base path to be deterministic
+        val projectRoot = project.basePath?.let { com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByPath(it) }
+        val repository = projectRoot?.let { repoManager.getRepositoryForFile(it) }
+        
+        return repository?.let { 
+             com.github.artusm.jetbrainspluginjiraworklog.git.GitUtils.getBranchNameOrRev(it)
+        }
     }
 
     /**
