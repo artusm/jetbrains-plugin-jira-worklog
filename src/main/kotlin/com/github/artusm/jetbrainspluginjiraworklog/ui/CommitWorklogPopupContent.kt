@@ -199,38 +199,51 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
             val result = jiraClient.searchAssignedIssues()
             
             SwingUtilities.invokeLater {
-                if (!project.isDisposed && result.isSuccess) {
-                    val issues = result.getOrNull()?.issues ?: emptyList()
-                    val model = taskComboBox.model as DefaultComboBoxModel<JiraIssue>
-                    
-                    issues.forEach { model.addElement(it) }
-                    
-                    // Set renderer to show key and summary
-                    taskComboBox.renderer = object : DefaultListCellRenderer() {
-                        override fun getListCellRendererComponent(
-                            list: JList<*>?,
-                            value: Any?,
-                            index: Int,
-                            isSelected: Boolean,
-                            cellHasFocus: Boolean
-                        ): java.awt.Component {
-                            val component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
-                            if (value is JiraIssue) {
-                                text = "${value.key} - ${value.summary}"
+                if (!project.isDisposed) {
+                    if (result.isSuccess) {
+                        val issues = result.getOrNull()?.issues ?: emptyList()
+                        val model = taskComboBox.model as DefaultComboBoxModel<JiraIssue>
+                        
+                        issues.forEach { model.addElement(it) }
+                        
+                        // Set renderer to show key and summary
+                        taskComboBox.renderer = object : DefaultListCellRenderer() {
+                            override fun getListCellRendererComponent(
+                                list: JList<*>?,
+                                value: Any?,
+                                index: Int,
+                                isSelected: Boolean,
+                                cellHasFocus: Boolean
+                            ): java.awt.Component {
+                                val component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
+                                if (value is JiraIssue) {
+                                    text = "${value.key} - ${value.summary}"
+                                }
+                                return component
                             }
-                            return component
                         }
-                    }
-                    
-                    // Preselect the issue from branch if found
-                    if (preselectedKey != null) {
-                        val matchingIssue = issues.find { it.key == preselectedKey }
-                        if (matchingIssue != null) {
-                            taskComboBox.selectedItem = matchingIssue
-                        } else {
-                            // Try to load the issue directly
-                            loadSpecificIssue(preselectedKey)
+                        
+                        // Preselect the issue from branch if found
+                        if (preselectedKey != null) {
+                            val matchingIssue = issues.find { it.key == preselectedKey }
+                            if (matchingIssue != null) {
+                                taskComboBox.selectedItem = matchingIssue
+                            } else {
+                                // Try to load the issue directly
+                                loadSpecificIssue(preselectedKey)
+                            }
                         }
+                    } else {
+                        // Show friendly error message
+                        val error = result.exceptionOrNull()
+                        val errorMessage = getErrorMessage(error)
+                        val title = getErrorTitle(error)
+                        
+                        Messages.showErrorDialog(
+                            project,
+                            errorMessage,
+                            title
+                        )
                     }
                 }
             }
@@ -242,21 +255,97 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
             val result = jiraClient.getIssueWithSubtasks(issueKey)
             
             SwingUtilities.invokeLater {
-                if (!project.isDisposed && result.isSuccess) {
-                    val issue = result.getOrNull()
-                    if (issue != null) {
-                        val model = taskComboBox.model as DefaultComboBoxModel<JiraIssue>
-                        model.addElement(issue)
-                        taskComboBox.selectedItem = issue
-                        
-                        // Also add subtasks if available
-                        issue.fields.subtasks?.forEach { subtask ->
-                            model.addElement(subtask)
+                if (!project.isDisposed) {
+                    if (result.isSuccess) {
+                        val issue = result.getOrNull()
+                        if (issue != null) {
+                            val model = taskComboBox.model as DefaultComboBoxModel<JiraIssue>
+                            model.addElement(issue)
+                            taskComboBox.selectedItem = issue
+                            
+                            // Also add subtasks if available
+                            issue.fields.subtasks?.forEach { subtask ->
+                                model.addElement(subtask)
+                            }
                         }
+                    } else {
+                        // Show error for specific issue lookup
+                        val error = result.exceptionOrNull()
+                        println("Failed to load issue $issueKey: ${error?.message}")
                     }
                 }
             }
         }.start()
+    }
+    
+    /**
+     * Get user-friendly error message based on exception type.
+     */
+    private fun getErrorMessage(error: Throwable?): String {
+        return when (error) {
+            is java.net.UnknownHostException -> {
+                val host = error.message ?: "unknown"
+                """Cannot resolve Jira hostname: '$host'
+                |
+                |This usually means:
+                |• The Jira URL in settings is incorrect
+                |• You're not connected to the internet
+                |• Your organization's Jira server is not accessible
+                |
+                |Please check your Jira URL in Settings → Tools → Jira Worklog Timer""".trimMargin()
+            }
+            is java.net.ConnectException -> {
+                """Cannot connect to Jira server
+                |
+                |Possible causes:
+                |• The Jira server is down
+                |• Firewall is blocking the connection
+                |• Wrong port or protocol (should use https://)
+                |
+                |Please verify your Jira URL in Settings → Tools → Jira Worklog Timer""".trimMargin()
+            }
+            is javax.net.ssl.SSLHandshakeException -> {
+                """SSL/TLS connection failed
+                |
+                |This can happen when:
+                |• Your Jira server uses an untrusted certificate
+                |• SSL/TLS version mismatch
+                |
+                |Please contact your Jira administrator or check your network settings.""".trimMargin()
+            }
+            is java.net.SocketTimeoutException -> {
+                """Connection timed out
+                |
+                |The Jira server is taking too long to respond.
+                |Please check your internet connection and try again.""".trimMargin()
+            }
+            is IllegalStateException -> {
+                """Configuration error: ${error.message}
+                |
+                |Please go to Settings → Tools → Jira Worklog Timer to configure your credentials.""".trimMargin()
+            }
+            else -> {
+                """Failed to connect to Jira
+                |
+                |Error: ${error?.message ?: "Unknown error"}
+                |
+                |Please check your settings and try again.""".trimMargin()
+            }
+        }
+    }
+    
+    /**
+     * Get error dialog title based on exception type.
+     */
+    private fun getErrorTitle(error: Throwable?): String {
+        return when (error) {
+            is java.net.UnknownHostException -> "Invalid Jira URL"
+            is java.net.ConnectException -> "Connection Failed"
+            is javax.net.ssl.SSLHandshakeException -> "SSL Error"
+            is java.net.SocketTimeoutException -> "Connection Timeout"
+            is IllegalStateException -> "Configuration Error"
+            else -> "Failed to Load Issues"
+        }
     }
     
     private fun submitWorklog() {
