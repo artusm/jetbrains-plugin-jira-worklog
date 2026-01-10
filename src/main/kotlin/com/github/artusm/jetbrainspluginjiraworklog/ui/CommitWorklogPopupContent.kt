@@ -5,6 +5,7 @@ import com.github.artusm.jetbrainspluginjiraworklog.git.GitBranchParser
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraApiClient
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssue
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
+import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.github.artusm.jetbrainspluginjiraworklog.utils.TimeFormatter
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
@@ -63,23 +64,23 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
         
         // Jira Issue selector
-        panel.add(createLabeledRow("Jira Issue:", taskComboBox))
+        panel.add(createLabeledRow(MyBundle.message("commit.jira.issue"), taskComboBox))
         panel.add(Box.createVerticalStrut(12))
         
         // Time spent field
         timeField.preferredSize = Dimension(200, timeField.preferredSize.height)
         updateTimeField()
-        panel.add(createLabeledRow("Time Spent:", timeField))
+        panel.add(createLabeledRow(MyBundle.message("commit.time.spent"), timeField))
         panel.add(Box.createVerticalStrut(12))
         
         // Quick adjust buttons
         val quickAdjustPanel = createQuickAdjustPanel()
-        panel.add(createLabeledRow("Quick adjust:", quickAdjustPanel))
+        panel.add(createLabeledRow(MyBundle.message("commit.quick.adjust"), quickAdjustPanel))
         panel.add(Box.createVerticalStrut(12))
         
         // Comment field
         val commentPanel = createCommentPanel()
-        panel.add(createLabeledRow("Comment:", commentPanel))
+        panel.add(createLabeledRow(MyBundle.message("commit.comment"), commentPanel))
         
         return panel
     }
@@ -105,11 +106,11 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         panel.background = UIUtil.getPanelBackground()
         
         // Create styled buttons
-        panel.add(createStyledButton("+1h", 3600 * 1000))
-        panel.add(createStyledButton("-1h", -3600 * 1000))
-        panel.add(createStyledButton("+30m", 30 * 60 * 1000))
-        panel.add(createStyledButton("×2") { currentTimeMs *= 2 })
-        panel.add(createStyledButton("÷2") { currentTimeMs /= 2 })
+        panel.add(createStyledButton(MyBundle.message("commit.button.+1h"), 3600 * 1000))
+        panel.add(createStyledButton(MyBundle.message("commit.button.-1h"), -3600 * 1000))
+        panel.add(createStyledButton(MyBundle.message("commit.button.+30m"), 30 * 60 * 1000))
+        panel.add(createStyledButton(MyBundle.message("commit.button.x2")) { currentTimeMs *= 2 })
+        panel.add(createStyledButton(MyBundle.message("commit.button.div2")) { currentTimeMs /= 2 })
         
         return panel
     }
@@ -160,7 +161,7 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         val panel = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0))
         panel.border = JBUI.Borders.emptyTop(16)
         
-        val submitButton = JButton("Submit Worklog")
+        val submitButton = JButton(MyBundle.message("commit.button.submit"))
         submitButton.preferredSize = Dimension(140, 32)
         submitButton.font = submitButton.font.deriveFont(Font.BOLD, 13f)
         submitButton.isFocusPainted = false
@@ -282,55 +283,14 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
      * Get user-friendly error message based on exception type.
      */
     private fun getErrorMessage(error: Throwable?): String {
+        val host = (error as? java.net.UnknownHostException)?.message ?: "unknown"
         return when (error) {
-            is java.net.UnknownHostException -> {
-                val host = error.message ?: "unknown"
-                """Cannot resolve Jira hostname: '$host'
-                |
-                |This usually means:
-                |• The Jira URL in settings is incorrect
-                |• You're not connected to the internet
-                |• Your organization's Jira server is not accessible
-                |
-                |Please check your Jira URL in Settings → Tools → Jira Worklog Timer""".trimMargin()
-            }
-            is java.net.ConnectException -> {
-                """Cannot connect to Jira server
-                |
-                |Possible causes:
-                |• The Jira server is down
-                |• Firewall is blocking the connection
-                |• Wrong port or protocol (should use https://)
-                |
-                |Please verify your Jira URL in Settings → Tools → Jira Worklog Timer""".trimMargin()
-            }
-            is javax.net.ssl.SSLHandshakeException -> {
-                """SSL/TLS connection failed
-                |
-                |This can happen when:
-                |• Your Jira server uses an untrusted certificate
-                |• SSL/TLS version mismatch
-                |
-                |Please contact your Jira administrator or check your network settings.""".trimMargin()
-            }
-            is java.net.SocketTimeoutException -> {
-                """Connection timed out
-                |
-                |The Jira server is taking too long to respond.
-                |Please check your internet connection and try again.""".trimMargin()
-            }
-            is IllegalStateException -> {
-                """Configuration error: ${error.message}
-                |
-                |Please go to Settings → Tools → Jira Worklog Timer to configure your credentials.""".trimMargin()
-            }
-            else -> {
-                """Failed to connect to Jira
-                |
-                |Error: ${error?.message ?: "Unknown error"}
-                |
-                |Please check your settings and try again.""".trimMargin()
-            }
+            is java.net.UnknownHostException -> MyBundle.message("error.unknown.host", host)
+            is java.net.ConnectException -> MyBundle.message("error.connect")
+            is javax.net.ssl.SSLHandshakeException -> MyBundle.message("error.ssl")
+            is java.net.SocketTimeoutException -> MyBundle.message("error.timeout")
+            is IllegalStateException -> MyBundle.message("error.config", error.message ?:"")
+            else -> MyBundle.message("error.general", error?.message ?: "Unknown error")
         }
     }
     
@@ -339,12 +299,12 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
      */
     private fun getErrorTitle(error: Throwable?): String {
         return when (error) {
-            is java.net.UnknownHostException -> "Invalid Jira URL"
-            is java.net.ConnectException -> "Connection Failed"
-            is javax.net.ssl.SSLHandshakeException -> "SSL Error"
-            is java.net.SocketTimeoutException -> "Connection Timeout"
-            is IllegalStateException -> "Configuration Error"
-            else -> "Failed to Load Issues"
+            is java.net.UnknownHostException -> MyBundle.message("error.unknown.host.title")
+            is java.net.ConnectException -> MyBundle.message("error.connect.title")
+            is javax.net.ssl.SSLHandshakeException -> MyBundle.message("error.ssl.title")
+            is java.net.SocketTimeoutException -> MyBundle.message("error.timeout.title")
+            is IllegalStateException -> MyBundle.message("error.config.title")
+            else -> MyBundle.message("error.general.title")
         }
     }
     
@@ -352,13 +312,21 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         val selectedIssue = taskComboBox.selectedItem as? JiraIssue
         
         if (selectedIssue == null) {
-            Messages.showErrorDialog(project, "Please select a Jira issue", "No Issue Selected")
+            Messages.showErrorDialog(
+                project, 
+                MyBundle.message("commit.error.no.issue"), 
+                MyBundle.message("commit.error.no.issue.title")
+            )
             return
         }
         
         val timeSpentSeconds = (currentTimeMs / 1000).toInt()
         if (timeSpentSeconds <= 0) {
-            Messages.showErrorDialog(project, "Time spent must be greater than zero", "Invalid Time")
+            Messages.showErrorDialog(
+                project, 
+                MyBundle.message("commit.error.invalid.time"), 
+                MyBundle.message("commit.error.invalid.time.title")
+            )
             return
         }
         
@@ -373,8 +341,8 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
                     if (result.isSuccess) {
                         Messages.showInfoMessage(
                             project,
-                            "Successfully logged ${TimeFormatter.formatJira(currentTimeMs)} to ${selectedIssue.key}",
-                            "Worklog Submitted"
+                            MyBundle.message("commit.success", TimeFormatter.formatJira(currentTimeMs), selectedIssue.key),
+                            MyBundle.message("commit.success.title")
                         )
                         
                         // Reset timer
@@ -385,8 +353,8 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
                     } else {
                         Messages.showErrorDialog(
                             project,
-                            "Failed to submit worklog: ${result.exceptionOrNull()?.message}",
-                            "Submission Failed"
+                            MyBundle.message("commit.error.submit", result.exceptionOrNull()?.message ?: ""),
+                            MyBundle.message("commit.error.submit.title")
                         )
                     }
                 }
