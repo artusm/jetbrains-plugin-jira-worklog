@@ -1,6 +1,7 @@
 package com.github.artusm.jetbrainspluginjiraworklog.jira
 
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
+import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.intellij.openapi.diagnostic.Logger
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -39,12 +40,12 @@ class JiraApiClient(private val settings: JiraSettings) {
     ): Result<JiraSearchResult> {
         val baseUrl = settings.getJiraUrl()
         if (baseUrl.isBlank()) {
-            return Result.failure(IllegalStateException("Jira URL is not configured"))
+            return Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
         }
         
         val token = settings.getPersonalAccessToken()
         if (token.isNullOrBlank()) {
-            return Result.failure(IllegalStateException("Personal Access Token is not configured"))
+            return Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
         }
         
         val encodedJql = java.net.URLEncoder.encode(jql, "UTF-8")
@@ -69,12 +70,12 @@ class JiraApiClient(private val settings: JiraSettings) {
     fun getIssueWithSubtasks(issueKey: String): Result<JiraIssue> {
         val baseUrl = settings.getJiraUrl()
         if (baseUrl.isBlank()) {
-            return Result.failure(IllegalStateException("Jira URL is not configured"))
+            return Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
         }
         
         val token = settings.getPersonalAccessToken()
         if (token.isNullOrBlank()) {
-            return Result.failure(IllegalStateException("Personal Access Token is not configured"))
+            return Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
         }
         
         val url = "$baseUrl/rest/api/2/issue/$issueKey?fields=key,summary,issuetype,subtasks"
@@ -104,12 +105,12 @@ class JiraApiClient(private val settings: JiraSettings) {
     ): Result<JiraWorklogResponse> {
         val baseUrl = settings.getJiraUrl()
         if (baseUrl.isBlank()) {
-            return Result.failure(IllegalStateException("Jira URL is not configured"))
+            return Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
         }
         
         val token = settings.getPersonalAccessToken()
         if (token.isNullOrBlank()) {
-            return Result.failure(IllegalStateException("Personal Access Token is not configured"))
+            return Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
         }
         
         // Convert seconds to Jira time format
@@ -145,12 +146,12 @@ class JiraApiClient(private val settings: JiraSettings) {
     fun testConnection(): Result<Boolean> {
         val baseUrl = settings.getJiraUrl()
         if (baseUrl.isBlank()) {
-            return Result.failure(IllegalStateException("Jira URL is not configured"))
+            return Result.failure(IllegalStateException(MyBundle.message("api.error.url.not.configured")))
         }
         
         val token = settings.getPersonalAccessToken()
         if (token.isNullOrBlank()) {
-            return Result.failure(IllegalStateException("Personal Access Token is not configured"))
+            return Result.failure(IllegalStateException(MyBundle.message("api.error.token.not.configured")))
         }
         
         val url = "$baseUrl/rest/api/2/myself"

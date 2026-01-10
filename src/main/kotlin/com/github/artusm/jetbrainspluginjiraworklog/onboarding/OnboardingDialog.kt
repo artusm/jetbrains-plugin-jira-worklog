@@ -2,6 +2,7 @@ package com.github.artusm.jetbrainspluginjiraworklog.onboarding
 
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraApiClient
+import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.progress.ProgressIndicator
@@ -44,7 +45,7 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
     private val feedbackPanel = JPanel()
     
     init {
-        title = "Welcome to Jira Worklog Timer"
+        title = MyBundle.message("onboarding.title")
         init()
         setupValidation()
     }
@@ -81,12 +82,11 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
         textPanel.layout = BoxLayout(textPanel, BoxLayout.Y_AXIS)
         textPanel.background = UIUtil.getPanelBackground()
         
-        val titleLabel = JBLabel("Welcome to Jira Worklog Timer")
+        val titleLabel = JBLabel(MyBundle.message("onboarding.title"))
         titleLabel.font = titleLabel.font.deriveFont(Font.BOLD, 20f)
         titleLabel.foreground = UIUtil.getLabelForeground()
         
-        val descLabel = JBLabel("<html>Track your time directly from your IDE and sync with Jira effortlessly.<br>" +
-                "Let's get you connected in just a few seconds.</html>")
+        val descLabel = JBLabel("<html>${MyBundle.message("onboarding.description")}</html>")
         descLabel.foreground = UIUtil.getLabelInfoForeground()
         descLabel.border = JBUI.Borders.empty(4, 0, 0, 0)
         
@@ -105,8 +105,8 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
         
         // Jira URL Section
         contentPanel.add(createSection(
-            "Jira Instance URL",
-            "Enter your Jira workspace URL (e.g., https://company.atlassian.net)",
+            MyBundle.message("onboarding.url.label"),
+            MyBundle.message("onboarding.url.description"),
             jiraUrlField,
             urlValidationLabel
         ))
@@ -115,8 +115,8 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
         
         // Token Section
         contentPanel.add(createSection(
-            "Personal Access Token",
-            "This token allows secure access to your Jira account",
+            MyBundle.message("onboarding.token.label"),
+            MyBundle.message("onboarding.token.description"),
             tokenField,
             null
         ))
@@ -169,9 +169,9 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
         fieldPanel.maximumSize = Dimension(Int.MAX_VALUE, field.preferredSize.height)
         
         field.putClientProperty("JTextField.placeholderText", if (field == jiraUrlField) {
-            "https://your-company.atlassian.net"
+            MyBundle.message("onboarding.url.placeholder")
         } else {
-            "Paste your token here"
+            MyBundle.message("onboarding.token.placeholder")
         })
         
         fieldPanel.add(field, BorderLayout.CENTER)
@@ -194,7 +194,7 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
         val iconLabel = JBLabel(AllIcons.General.ContextHelp)
         helpPanel.add(iconLabel)
         
-        val linkLabel = JBLabel("<html><a href=''>How to generate a Personal Access Token</a></html>")
+        val linkLabel = JBLabel("<html><a href=''>${MyBundle.message("onboarding.help.link")}</a></html>")
         linkLabel.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
         linkLabel.addMouseListener(object : java.awt.event.MouseAdapter() {
             override fun mouseClicked(e: java.awt.event.MouseEvent) {
@@ -218,8 +218,7 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
         val iconLabel = JBLabel(AllIcons.General.BalloonInformation)
         infoPanel.add(iconLabel, BorderLayout.WEST)
         
-        val textLabel = JBLabel("<html><b>Privacy:</b> Your credentials are stored securely " +
-                "in the IDE's password safe and never shared with third parties.</html>")
+        val textLabel = JBLabel("<html><b>Privacy:</b> ${MyBundle.message("onboarding.privacy.message")}</html>")
         textLabel.foreground = UIUtil.getLabelForeground()
         textLabel.font = textLabel.font.deriveFont(11f)
         infoPanel.add(textLabel, BorderLayout.CENTER)
@@ -257,23 +256,23 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
                 !parsedUrl.protocol.equals("https", ignoreCase = true) -> {
                     urlValidationLabel.icon = AllIcons.General.Warning
                     urlValidationLabel.foreground = JBColor.ORANGE
-                    urlValidationLabel.toolTipText = "HTTPS is recommended for security"
+                    urlValidationLabel.toolTipText = MyBundle.message("validation.url.https.warning")
                 }
                 !url.contains("atlassian.net") && !url.contains("jira") -> {
                     urlValidationLabel.icon = AllIcons.General.Warning
                     urlValidationLabel.foreground = JBColor.ORANGE
-                    urlValidationLabel.toolTipText = "URL doesn't look like a Jira instance"
+                    urlValidationLabel.toolTipText = MyBundle.message("validation.url.format.warning")
                 }
                 else -> {
                     urlValidationLabel.icon = AllIcons.General.InspectionsOK
                     urlValidationLabel.foreground = JBColor.GREEN
-                    urlValidationLabel.toolTipText = "URL format looks good"
+                    urlValidationLabel.toolTipText = MyBundle.message("validation.url.format.ok")
                 }
             }
         } catch (e: Exception) {
             urlValidationLabel.icon = AllIcons.General.Error
             urlValidationLabel.foreground = JBColor.RED
-            urlValidationLabel.toolTipText = "Invalid URL format"
+            urlValidationLabel.toolTipText = MyBundle.message("validation.url.invalid")
         }
     }
     
@@ -316,13 +315,13 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
         hideFeedback()
         
         if (url.isBlank()) {
-            showFeedback("Please enter your Jira instance URL", true)
+            showFeedback(MyBundle.message("validation.url.missing"), true)
             jiraUrlField.requestFocus()
             return
         }
         
         if (token.isBlank()) {
-            showFeedback("Please enter your Personal Access Token", true)
+            showFeedback(MyBundle.message("validation.token.missing"), true)
             tokenField.requestFocus()
             return
         }
@@ -332,11 +331,11 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
         settings.setPersonalAccessToken(token)
         
         // Test connection asynchronously
-        ProgressManager.getInstance().run(object : Task.Modal(project, "Testing Connection to Jira...", true) {
+        ProgressManager.getInstance().run(object : Task.Modal(project, MyBundle.message("connection.testing"), true) {
             private var result: Result<Boolean>? = null
             
             override fun run(indicator: ProgressIndicator) {
-                indicator.text = "Connecting to $url..."
+                indicator.text = MyBundle.message("connection.connecting", url)
                 indicator.isIndeterminate = true
                 
                 val client = JiraApiClient(settings)
@@ -346,7 +345,7 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
             override fun onSuccess() {
                 result?.let { r ->
                     if (r.isSuccess) {
-                        showFeedback("Successfully connected to Jira! You can now start tracking time.", false)
+                        showFeedback(MyBundle.message("connection.success"), false)
                         // Close dialog after a brief delay
                         Timer(1000) { 
                             SwingUtilities.invokeLater {
@@ -360,20 +359,20 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
                         val errorMsg = r.exceptionOrNull()?.message ?: "Unknown error"
                         val troubleshooting = when {
                             errorMsg.contains("401") || errorMsg.contains("Unauthorized") -> 
-                                "<br><br><b>Tip:</b> Your token may be invalid or expired. Try generating a new one."
+                                MyBundle.message("onboarding.error.tip.401")
                             errorMsg.contains("404") || errorMsg.contains("Not Found") -> 
-                                "<br><br><b>Tip:</b> Check that your Jira URL is correct."
+                                MyBundle.message("onboarding.error.tip.404")
                             errorMsg.contains("timeout") || errorMsg.contains("connect") -> 
-                                "<br><br><b>Tip:</b> Check your internet connection and firewall settings."
+                                MyBundle.message("onboarding.error.tip.timeout")
                             else -> ""
                         }
-                        showFeedback("Failed to connect to Jira: $errorMsg$troubleshooting", true)
+                        showFeedback(MyBundle.message("onboarding.error.failed", errorMsg) + troubleshooting, true)
                     }
                 }
             }
             
             override fun onThrowable(error: Throwable) {
-                showFeedback("Unexpected error: ${error.message}", true)
+                showFeedback(MyBundle.message("onboarding.error.unexpected", error.message ?: ""), true)
             }
         })
     }

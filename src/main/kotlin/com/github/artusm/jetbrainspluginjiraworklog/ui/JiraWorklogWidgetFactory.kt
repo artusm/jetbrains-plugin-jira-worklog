@@ -1,6 +1,8 @@
 package com.github.artusm.jetbrainspluginjiraworklog.ui
 
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
+import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.StatusBar
 import com.intellij.openapi.wm.StatusBarWidget
@@ -21,7 +23,7 @@ class JiraWorklogWidgetFactory : StatusBarWidgetFactory {
     @Nls
     @NotNull
     override fun getDisplayName(): String {
-        return "Jira Worklog Timer"
+        return MyBundle.message("widget.display.name")
     }
 
     override fun isAvailable(@NotNull project: Project): Boolean {
