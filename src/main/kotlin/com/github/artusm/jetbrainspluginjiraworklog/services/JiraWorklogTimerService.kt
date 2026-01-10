@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.update
 
 @Service(Service.Level.PROJECT)
 open class JiraWorklogTimerService(
-    private val project: Project,
+    private val project: Project?,
     private val coroutineScope: CoroutineScope
 ) : CoroutineScope {
     
@@ -25,7 +25,7 @@ open class JiraWorklogTimerService(
     }
     
     protected open val persistentState: JiraWorklogPersistentState 
-        get() = project.service()
+        get() = project?.service() ?: throw IllegalStateException("Project is null")
         
     protected open val settings: JiraSettings get() = JiraSettings.getInstance()
     

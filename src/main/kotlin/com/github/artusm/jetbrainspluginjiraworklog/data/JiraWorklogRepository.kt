@@ -11,25 +11,18 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 
-/**
- * Repository for managing Jira worklog data and issue mappings.
- * Acts as a single source of truth for the UI and other services.
- */
 @Service(Service.Level.PROJECT)
-class JiraWorklogRepository(
-    private val project: Project?,
-    // Injectable API for testing
-    private val testApi: JiraApi? = null,
-    // Injectable state for testing
-    private val testPersistentState: JiraWorklogPersistentState? = null
+open class JiraWorklogRepository(
+    private val project: Project?
 ) {
 
     private val settings: JiraSettings get() = JiraSettings.getInstance()
     
     // Use injected API if present, otherwise create new client
-    private val api: JiraApi by lazy { testApi ?: JiraApiClient(settings) }
+    protected val api: JiraApi by lazy { JiraApiClient(settings) }
     
-    private val persistentState: JiraWorklogPersistentState get() = testPersistentState ?: project!!.service()
+    protected val persistentState: JiraWorklogPersistentState
+        get() = project?.service() ?: throw IllegalStateException("Project is null")
 
     /**
      * Search for issues assigned to the current user.

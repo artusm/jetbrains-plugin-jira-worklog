@@ -30,11 +30,11 @@ class CommitWorklogViewModelTest {
         FakeTimerService.fakeState.saveIssueForBranch("feature/test", "JIRA-1")
 
         // Inject fakeState into repository for robust testing
-        val realRepository = JiraWorklogRepository(
-             nullAs(), 
-             fakeApi, 
-             FakeTimerService.fakeState
-        )
+        // Inject fakeState into repository for robust testing via subclass
+        val realRepository = object : JiraWorklogRepository(nullAs()) {
+             override val api = fakeApi
+             override val persistentState = FakeTimerService.fakeState
+        }
         
         viewModel = CommitWorklogViewModel(
             realRepository,
