@@ -45,18 +45,17 @@ class BranchChangeListener : GitRepositoryChangeListener {
         }
         
         // Restore saved ticket for current branch, or use fallback
-        if (currentBranch != null) {
-            val savedIssue = persistentState.getIssueForBranch(currentBranch)
+        currentBranch?.let { branch ->
+            val savedIssue = persistentState.getIssueForBranch(branch)
             
             if (savedIssue != null) {
                 // Branch has saved ticket - use it
                 persistentState.setLastIssueKey(savedIssue)
             } else {
                 // No saved ticket - use fallback from last issue
-                val lastIssue = persistentState.getLastIssueKey()
-                if (lastIssue != null) {
+                persistentState.getLastIssueKey()?.let { lastIssue ->
                     // Save the fallback issue for this new branch
-                    persistentState.saveIssueForBranch(currentBranch, lastIssue)
+                    persistentState.saveIssueForBranch(branch, lastIssue)
                 }
             }
         }

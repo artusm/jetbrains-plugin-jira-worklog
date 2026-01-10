@@ -82,9 +82,7 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
     }
     
     // Branch-specific issue tracking
-    fun getIssueForBranch(branchName: String): String? {
-        return state.branchToIssueMap[branchName]
-    }
+    fun getIssueForBranch(branchName: String): String? = state.branchToIssueMap[branchName]
     
     fun saveIssueForBranch(branchName: String, issueKey: String) {
         state.branchToIssueMap[branchName] = issueKey

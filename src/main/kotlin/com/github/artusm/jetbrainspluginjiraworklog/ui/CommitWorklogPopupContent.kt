@@ -62,8 +62,7 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         
         // Add selection listener to save selected issue per branch
         taskComboBox.addActionListener {
-            val selectedIssue = taskComboBox.selectedItem as? JiraIssue
-            if (selectedIssue != null) {
+            (taskComboBox.selectedItem as? JiraIssue)?.let { selectedIssue ->
                 saveSelectedIssueForCurrentBranch(selectedIssue.key)
             }
         }
@@ -313,12 +312,14 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
      * Save selected issue for current branch
      */
     private fun saveSelectedIssueForCurrentBranch(issueKey: String) {
-        val repoManager = GitRepositoryManager.getInstance(project)
-        val repository = repoManager.repositories.firstOrNull() ?: return
-        
-        val branchName = repository.currentBranch?.name ?: return
-        persistentState.saveIssueForBranch(branchName, issueKey)
+        // Always update the global fallback (works for non-Git projects too)
         persistentState.setLastIssueKey(issueKey)
+
+        // Try to save per-branch if Git repo exists
+        val repoManager = GitRepositoryManager.getInstance(project)
+        repoManager.repositories.firstOrNull()?.currentBranch?.name?.let { branchName ->
+            persistentState.saveIssueForBranch(branchName, issueKey)
+        }
     }
     
     /**
@@ -326,10 +327,8 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
      */
     private fun getSavedIssueForCurrentBranch(): String? {
         val repoManager = GitRepositoryManager.getInstance(project)
-        val repository = repoManager.repositories.firstOrNull() ?: return persistentState.getLastIssueKey()
-        
-        val branchName = repository.currentBranch?.name ?: return persistentState.getLastIssueKey()
-        return persistentState.getIssueForBranch(branchName) ?: persistentState.getLastIssueKey()
+        val branchName = repoManager.repositories.firstOrNull()?.currentBranch?.name
+        return branchName?.let { persistentState.getIssueForBranch(it) } ?: persistentState.getLastIssueKey()
     }
     
     private fun submitWorklog() {
