@@ -25,7 +25,11 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
         
         // Auto-pause state tracking
         var autoPausedByFocus: Boolean = false,
-        var autoPausedByProjectSwitch: Boolean = false
+        var autoPausedByProjectSwitch: Boolean = false,
+        
+        // Branch → Jira Issue Key mapping
+        @field:com.intellij.util.xmlb.annotations.MapAnnotation(entryTagName = "branch-mapping", keyAttributeName = "branch", valueAttributeName = "issue")
+        var branchToIssueMap: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
     )
 
     override fun getState(): State = state
@@ -76,6 +80,38 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
     fun clearAutoPauseFlags() {
         state.autoPausedByFocus = false
         state.autoPausedByProjectSwitch = false
+    }
+    
+    // Branch-specific issue tracking
+    @Synchronized
+    fun getIssueForBranch(branchName: String): String? = state.branchToIssueMap[branchName]
+    
+    @Synchronized
+    fun saveIssueForBranch(branchName: String, issueKey: String) {
+        state.branchToIssueMap[branchName] = issueKey
+    }
+
+    @Synchronized
+    fun getLastIssueKey(): String? = state.lastIssueKey
+
+    @Synchronized
+    fun setLastIssueKey(issueKey: String?) {
+        state.lastIssueKey = issueKey
+    }
+    
+    /**
+     * Clean up issue mappings for branches that no longer exist.
+     * Keeps only branches that are in the provided set of active branch names.
+     */
+    @Synchronized
+    fun cleanupDeletedBranches(activeBranchNames: Set<String>) {
+        val iterator = state.branchToIssueMap.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (entry.key !in activeBranchNames && !entry.key.startsWith("detached")) {
+                iterator.remove()
+            }
+        }
     }
     
     fun reset() {

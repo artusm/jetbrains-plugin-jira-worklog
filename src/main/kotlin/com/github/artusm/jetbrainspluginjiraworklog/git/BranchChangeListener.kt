@@ -1,12 +1,14 @@
 package com.github.artusm.jetbrainspluginjiraworklog.git
 
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
+import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
 import org.jetbrains.annotations.NotNull
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Listens for Git repository changes (including branch switches) and
@@ -14,7 +16,11 @@ import org.jetbrains.annotations.NotNull
  */
 class BranchChangeListener : GitRepositoryChangeListener {
 
-    private var lastBranchName: String? = null
+    companion object {
+        private const val CLEANUP_INTERVAL = 10
+    }
+
+    private val lastBranchByRepo = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     override fun repositoryChanged(@NotNull repository: GitRepository) {
         val project: Project = repository.project
@@ -22,37 +28,62 @@ class BranchChangeListener : GitRepositoryChangeListener {
             return
         }
 
-        val branchName = getBranchName(repository)
+        val branchName = GitUtils.getBranchNameOrRev(repository)
+        val repoPath = repository.root.path
+        val lastBranchName = lastBranchByRepo[repoPath]
         
         // Check if branch actually changed
         if (lastBranchName != null && lastBranchName != branchName) {
-            onBranchChanged(project)
+            onBranchChanged(project, repository, branchName)
         }
         
-        lastBranchName = branchName
+        lastBranchByRepo[repoPath] = branchName
     }
 
-    private fun onBranchChanged(project: Project) {
+    private fun onBranchChanged(project: Project, repository: GitRepository, newBranchName: String?) {
         val settings = JiraSettings.getInstance()
+        val persistentState = project.service<JiraWorklogPersistentState>()
         
         // Auto-pause timer if enabled in settings
         if (settings.isPauseOnBranchChange()) {
             val timerService = project.service<JiraWorklogTimerService>()
             timerService.pause()
         }
-    }
-
-    private fun getBranchName(repo: GitRepository): String? {
-        val currentBranch = repo.currentBranch
-        if (currentBranch != null) {
-            return currentBranch.name
+        
+        // Restore saved ticket for current branch, or use fallback
+        newBranchName?.let { branch ->
+            val savedIssue = persistentState.getIssueForBranch(branch)
+            
+            if (savedIssue != null) {
+                // Branch has saved ticket - use it
+                persistentState.setLastIssueKey(savedIssue)
+            } else {
+                // No saved ticket - lastIssueKey will be used as fallback in UI
+                // User can explicitly save by selecting an issue in the popup
+            }
         }
         
-        // Detached HEAD state - show short hash
-        val revision = repo.currentRevision
-        if (revision != null && revision.length > 7) {
-            return "detached:${revision.substring(0, 7)}"
+        // Periodically clean up deleted branches (every 10th branch change)
+        if (shouldCleanupDeletedBranches()) {
+            cleanupDeletedBranches(persistentState, project)
         }
-        return "detached"
+    }
+    
+    private val branchChangeCount = AtomicInteger(0)
+    
+    private fun shouldCleanupDeletedBranches(): Boolean {
+        return branchChangeCount.incrementAndGet() % CLEANUP_INTERVAL == 0
+    }
+    
+    private fun cleanupDeletedBranches(
+        persistentState: JiraWorklogPersistentState,
+        project: Project
+    ) {
+        val activeBranches = git4idea.repo.GitRepositoryManager.getInstance(project).repositories
+            .flatMap { it.branches.localBranches + it.branches.remoteBranches }
+            .map { it.name }
+            .toSet()
+
+        persistentState.cleanupDeletedBranches(activeBranches)
     }
 }

@@ -4,6 +4,7 @@ import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.git.GitBranchParser
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraApiClient
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssue
+import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
 import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.github.artusm.jetbrainspluginjiraworklog.utils.TimeFormatter
@@ -32,6 +33,7 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
     
     private val settings = JiraSettings.getInstance()
     private val timerService = project.service<JiraWorklogTimerService>()
+    private val persistentState = project.service<JiraWorklogPersistentState>()
     private val gitBranchParser = service<GitBranchParser>()
     private val jiraClient = JiraApiClient(settings)
     
@@ -57,6 +59,13 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         
         // Load initial data
         loadInitialData()
+        
+        // Add selection listener to save selected issue per branch
+        taskComboBox.addActionListener {
+            (taskComboBox.selectedItem as? JiraIssue)?.let { selectedIssue ->
+                saveSelectedIssueForCurrentBranch(selectedIssue.key)
+            }
+        }
     }
     
     private fun createFormPanel(): JPanel {
@@ -178,20 +187,11 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
     }
     
     private fun loadInitialData() {
-        // Get current Git branch and parse Jira key
-        val gitRepoManager = GitRepositoryManager.getInstance(project)
-        val repositories = gitRepoManager.repositories
+        // Get saved issue for current branch (or last issue as fallback)
+        val savedIssueKey = getSavedIssueForCurrentBranch()
         
-        if (repositories.isNotEmpty()) {
-            val currentBranch = repositories.first().currentBranch?.name
-            val parseResult = gitBranchParser.parseBranchName(currentBranch)
-            val primaryKey = parseResult.getPrimaryKey()
-            
-            // Load issues
-            loadIssues(primaryKey)
-        } else {
-            loadIssues(null)
-        }
+        // Load issues with the saved/fallback key
+        loadIssues(savedIssueKey)
     }
     
     private fun loadIssues(preselectedKey: String?) {
@@ -287,7 +287,7 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         return when (error) {
             is java.net.UnknownHostException -> MyBundle.message("error.unknown.host", host)
             is java.net.ConnectException -> MyBundle.message("error.connect")
-            is javax.net.ssl.SSLHandshakeException -> MyBundle.message("error.ssl")
+            is javax.net.ssl.SSLException -> MyBundle.message("error.ssl")
             is java.net.SocketTimeoutException -> MyBundle.message("error.timeout")
             is IllegalStateException -> MyBundle.message("error.config", error.message ?:"")
             else -> MyBundle.message("error.general", error?.message ?: "Unknown error")
@@ -301,11 +301,46 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         return when (error) {
             is java.net.UnknownHostException -> MyBundle.message("error.unknown.host.title")
             is java.net.ConnectException -> MyBundle.message("error.connect.title")
-            is javax.net.ssl.SSLHandshakeException -> MyBundle.message("error.ssl.title")
+            is javax.net.ssl.SSLException -> MyBundle.message("error.ssl.title")
             is java.net.SocketTimeoutException -> MyBundle.message("error.timeout.title")
             is IllegalStateException -> MyBundle.message("error.config.title")
             else -> MyBundle.message("error.general.title")
         }
+    }
+    
+    /**
+     * Helper to get the current branch name.
+     */
+    private fun getCurrentBranchName(): String? {
+        val repoManager = GitRepositoryManager.getInstance(project)
+        // Try to get repository for the project base path to be deterministic
+        val projectRoot = project.basePath?.let { com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByPath(it) }
+        val repository = projectRoot?.let { repoManager.getRepositoryForFile(it) }
+        
+        return repository?.let {
+            com.github.artusm.jetbrainspluginjiraworklog.git.GitUtils.getBranchNameOrRev(it)
+        }
+    }
+
+    /**
+     * Save selected issue for current branch
+     */
+    private fun saveSelectedIssueForCurrentBranch(issueKey: String) {
+        // Always update the global fallback (works for non-Git projects too)
+        persistentState.setLastIssueKey(issueKey)
+
+        // Try to save per-branch if Git repo exists
+        getCurrentBranchName()?.let { branchName ->
+            persistentState.saveIssueForBranch(branchName, issueKey)
+        }
+    }
+    
+    /**
+     * Get saved issue for current branch (with fallback to last issue)
+     */
+    private fun getSavedIssueForCurrentBranch(): String? {
+        val branchName = getCurrentBranchName()
+        return branchName?.let { persistentState.getIssueForBranch(it) } ?: persistentState.getLastIssueKey()
     }
     
     private fun submitWorklog() {
