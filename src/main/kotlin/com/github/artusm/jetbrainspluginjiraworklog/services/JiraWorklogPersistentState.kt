@@ -69,8 +69,6 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
         state.autoPausedByFocus = paused
     }
     
-    fun isAutoPausedByProjectSwitch(): Boolean = state.autoPausedByProjectSwitch
-    
     fun setAutoPausedByProjectSwitch(paused: Boolean) {
         state.autoPausedByProjectSwitch = paused
     }
