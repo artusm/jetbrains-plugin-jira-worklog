@@ -251,7 +251,9 @@ class JiraWorklogConfigurable : Configurable {
                 settings.setPersonalAccessToken(token)
                 
                 val result = try {
-                    JiraApiClient(settings).testConnection()
+                    runBlocking {
+                        JiraApiClient(settings).testConnection()
+                    }
                 } finally {
                      // We only restore if we don't apply? No, we restore ALWAYS because "test" shouldn't apply settings.
                      settings.setJiraUrl(originalUrl)
