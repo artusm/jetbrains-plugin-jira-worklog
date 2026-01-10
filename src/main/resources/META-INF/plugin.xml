@@ -5,11 +5,33 @@
     <vendor>artusm</vendor>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>Git4Idea</depends>
 
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.artusm.jetbrainspluginjiraworklog.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.artusm.jetbrainspluginjiraworklog.startup.MyProjectActivity" />
+        <!-- Services -->
+        <projectService serviceImplementation="com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService"/>
+        <applicationService serviceImplementation="com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings"/>
+        <applicationService serviceImplementation="com.github.artusm.jetbrainspluginjiraworklog.git.GitBranchParser"/>
+        
+        <!-- Status Bar Widget -->
+        <statusBarWidgetFactory id="com.github.artusm.JiraWorklogWidget" 
+                                implementation="com.github.artusm.jetbrainspluginjiraworklog.ui.JiraWorklogWidgetFactory" 
+                                order="before memoryUsageWidget"/>
+        
+        <!-- Settings -->
+        <applicationConfigurable instance="com.github.artusm.jetbrainspluginjiraworklog.config.JiraWorklogConfigurable"/>
+        
+        <!-- Startup Activity for Onboarding -->
+        <postStartupActivity implementation="com.github.artusm.jetbrainspluginjiraworklog.startup.OnboardingStartupActivity"/>
+        
+        <!-- Notification Groups -->
+        <notificationGroup id="Jira Worklog Timer" displayType="BALLOON" isLogByDefault="false"/>
+    </extensions>
+    
+    <extensions defaultExtensionNs="Git4Idea">
+        <!-- Git Repository Change Listener -->
+        <gitRepositoryChangeListener implementation="com.github.artusm.jetbrainspluginjiraworklog.git.BranchChangeListener"/>
     </extensions>
 </idea-plugin>
