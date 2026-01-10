@@ -16,20 +16,25 @@ import com.intellij.openapi.project.Project
  * Acts as a single source of truth for the UI and other services.
  */
 @Service(Service.Level.PROJECT)
-open class JiraWorklogRepository(private val project: Project?) {
+class JiraWorklogRepository(
+    private val project: Project?,
+    // Injectable API for testing
+    private val testApi: JiraApi? = null,
+    // Injectable state for testing
+    private val testPersistentState: JiraWorklogPersistentState? = null
+) {
 
-    protected open val settings: JiraSettings get() = JiraSettings.getInstance()
+    private val settings: JiraSettings get() = JiraSettings.getInstance()
     
-    // In a real DI system we'd inject this, but for now we instantiate it.
-    // We could also make JiraApiClient a service.
-    protected open val api: JiraApi by lazy { JiraApiClient(settings) }
+    // Use injected API if present, otherwise create new client
+    private val api: JiraApi by lazy { testApi ?: JiraApiClient(settings) }
     
-    protected open val persistentState: JiraWorklogPersistentState get() = project!!.service()
+    private val persistentState: JiraWorklogPersistentState get() = testPersistentState ?: project!!.service()
 
     /**
      * Search for issues assigned to the current user.
      */
-    open suspend fun getAssignedIssues(): Result<JiraSearchResult> {
+    suspend fun getAssignedIssues(): Result<JiraSearchResult> {
         return api.searchAssignedIssues()
     }
 
@@ -43,7 +48,7 @@ open class JiraWorklogRepository(private val project: Project?) {
     /**
      * Submit a worklog entry.
      */
-    open suspend fun submitWorklog(
+    suspend fun submitWorklog(
         issueKey: String, 
         timeSpentSeconds: Int, 
         comment: String?
@@ -54,7 +59,7 @@ open class JiraWorklogRepository(private val project: Project?) {
     /**
      * Save the selected issue key for a specific branch (and globally as fallback).
      */
-    open fun saveSelectedIssue(issueKey: String, branchName: String?) {
+    fun saveSelectedIssue(issueKey: String, branchName: String?) {
         // Always update global fallback
         persistentState.setLastIssueKey(issueKey)
         
@@ -67,7 +72,7 @@ open class JiraWorklogRepository(private val project: Project?) {
     /**
      * Get the saved issue key for a branch, falling back to the last used global key.
      */
-    open fun getSavedIssueKey(branchName: String?): String? {
+    fun getSavedIssueKey(branchName: String?): String? {
         val branchKey = branchName?.let { persistentState.getIssueForBranch(it) }
         return branchKey ?: persistentState.getLastIssueKey()
     }

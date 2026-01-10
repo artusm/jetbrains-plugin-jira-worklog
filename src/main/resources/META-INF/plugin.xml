@@ -41,9 +41,5 @@
                   topic="com.intellij.openapi.application.ApplicationActivationListener"/>
     </applicationListeners>
     
-    <projectListeners>
-        <!-- Project Close Tracking -->
-        <listener class="com.github.artusm.jetbrainspluginjiraworklog.listeners.WindowFocusListener"
-                  topic="com.intellij.openapi.project.ProjectManagerListener"/>
-    </projectListeners>
+
 </idea-plugin>

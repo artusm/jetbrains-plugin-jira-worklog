@@ -1,5 +1,6 @@
 package com.github.artusm.jetbrainspluginjiraworklog.jira
 
+import com.github.artusm.jetbrainspluginjiraworklog.config.JiraConfig
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.github.artusm.jetbrainspluginjiraworklog.utils.TimeFormatter
@@ -20,7 +21,7 @@ import java.util.*
  * HTTP client for Jira REST API v2.
  * Handles authentication and API requests.
  */
-class JiraApiClient(private val settings: JiraSettings) : JiraApi {
+class JiraApiClient(private val settings: JiraConfig) : JiraApi {
     
     companion object {
         private val LOG = Logger.getInstance(JiraApiClient::class.java)

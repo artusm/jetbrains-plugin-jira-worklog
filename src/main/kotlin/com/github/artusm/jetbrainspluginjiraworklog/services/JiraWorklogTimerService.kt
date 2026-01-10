@@ -9,29 +9,24 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
-/**
- * Project-level service managing the timer state and time accumulation.
- * Uses Kotlin Coroutines for timing and StateFlow for reactive updates.
- */
 @Service(Service.Level.PROJECT)
 open class JiraWorklogTimerService(
-    private val project: Project?,
-    // Optional dependency for testing to avoid initialization order issues
-    private val testPersistentState: JiraWorklogPersistentState? = null
+    private val project: Project,
+    private val coroutineScope: CoroutineScope
 ) : CoroutineScope {
     
-    // Manual scope since we might be on older IntelliJ platform where CoroutineScope injection 
-    // isn't guaranteed or valid for all constructor patterns.
-    private val job = SupervisorJob()
-    override val coroutineContext = Dispatchers.Default + job
+    override val coroutineContext = coroutineScope.coroutineContext
     
     companion object {
         private const val SLEEP_DETECTION_THRESHOLD_MS = 5000L
         private const val TICK_INTERVAL_MS = 1000L
     }
     
-    protected open val persistentState: JiraWorklogPersistentState get() = testPersistentState ?: project!!.service()
+    protected open val persistentState: JiraWorklogPersistentState 
+        get() = project.service()
+        
     protected open val settings: JiraSettings get() = JiraSettings.getInstance()
     
     // Lazy to avoid accessing persistentState in init if mocked
@@ -152,9 +147,11 @@ open class JiraWorklogTimerService(
     }
     
     fun addTimeMs(timeMs: Long) {
-        val newTime = _timeFlow.value + timeMs
-        _timeFlow.value = newTime
-        persistentState.setTotalTimeMs(newTime)
+        _timeFlow.update { current ->
+            val newTime = current + timeMs
+            persistentState.setTotalTimeMs(newTime)
+            newTime
+        }
     }
     
     fun autoPauseByFocus() {
@@ -178,7 +175,5 @@ open class JiraWorklogTimerService(
         }
     }
     
-    fun dispose() {
-        job.cancel()
-    }
+
 }

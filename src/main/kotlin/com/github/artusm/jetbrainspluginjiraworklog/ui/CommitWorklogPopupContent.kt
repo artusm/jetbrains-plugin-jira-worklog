@@ -121,7 +121,7 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
                         state.error.message ?: MyBundle.message("error.general", "Unknown"),
                         MyBundle.message("error.general.title")
                     )
-                    // We might want to clear error in VM after showing
+                    viewModel.clearError()
                 }
                 
                 // Success Handling
@@ -266,6 +266,7 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
     override fun removeNotify() {
         super.removeNotify()
         uiScope.cancel() // Cancel coroutines when view is removed
+        viewModel.dispose()
     }
     
     override fun getPreferredSize(): Dimension {

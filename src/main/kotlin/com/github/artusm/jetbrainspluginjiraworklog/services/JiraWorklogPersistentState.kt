@@ -12,7 +12,7 @@ import com.intellij.openapi.components.*
     name = "JiraWorklogPersistentState",
     storages = [Storage(StoragePathMacros.WORKSPACE_FILE)]
 )
-open class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersistentState.State> {
+class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersistentState.State> {
     
     private var state = State()
 
@@ -38,7 +38,7 @@ open class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPers
         this.state = state
     }
 
-    open fun getTotalTimeMs(): Long = state.totalTimeMs
+    fun getTotalTimeMs(): Long = state.totalTimeMs
     
     fun setTotalTimeMs(timeMs: Long) {
         state.totalTimeMs = timeMs
@@ -48,7 +48,7 @@ open class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPers
         state.totalTimeMs += timeMs
     }
     
-    open fun getStatus(): TimeTrackingStatus {
+    fun getStatus(): TimeTrackingStatus {
         return try {
             TimeTrackingStatus.valueOf(state.status)
         } catch (e: IllegalArgumentException) {

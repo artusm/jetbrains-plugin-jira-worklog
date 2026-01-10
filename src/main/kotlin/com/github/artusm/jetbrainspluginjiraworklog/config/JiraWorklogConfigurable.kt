@@ -228,34 +228,14 @@ class JiraWorklogConfigurable : Configurable {
 
         ProgressManager.getInstance().run(object : Task.Backgroundable(null, "Testing Jira Connection", false) {
             override fun run(indicator: ProgressIndicator) {
-                // Use temporary settings
-                val tempSettings = JiraSettings.getInstance().state.copy(jiraUrl = url) 
-                // Careful: state.copy might not be deep copy if properties are objects, but strings are immutable.
-                // Actually easier to just instantiate client with ad-hoc config or mock config.
-                // JiraApiClient constructor takes JiraSettings.
-                // We shouldn't mutate the singleton settings for a test.
-                // Ideally, JiraApiClient should take a config object/interface, not the persistent component directly.
-                // But since we refactored it... let's check JiraApiClient.
-                
-                // Hack: We can temporarily set the settings and restore, but that's thread-unsafe if other things read it.
-                // Better: Create a dummy JiraSettings object if possible? It's a service.
-                // Or just assume single user context. The original code did set/restore.
-                
-                val originalUrl = settings.getJiraUrl()
-                val originalToken = settings.getPersonalAccessToken()
-                
-                // We will rely on the fact that UI access is mostly single threaded for configuration or acceptable risk for this simple plugin
-                settings.setJiraUrl(url)
-                settings.setPersonalAccessToken(token)
-                
-                val result = try {
-                    runBlocking {
-                        JiraApiClient(settings).testConnection()
-                    }
-                } finally {
-                     // We only restore if we don't apply? No, we restore ALWAYS because "test" shouldn't apply settings.
-                     settings.setJiraUrl(originalUrl)
-                     settings.setPersonalAccessToken(originalToken)
+                // Create restricted config just for this test
+                val tempConfig = object : JiraConfig {
+                    override fun getJiraUrl(): String = url
+                    override fun getPersonalAccessToken(): String = token
+                }
+
+                val result = runBlocking {
+                    JiraApiClient(tempConfig).testConnection()
                 }
 
                 SwingUtilities.invokeLater {

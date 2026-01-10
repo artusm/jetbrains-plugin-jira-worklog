@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 
 class CommitWorklogViewModel(
     private val repository: JiraWorklogRepository,
@@ -134,6 +135,13 @@ class CommitWorklogViewModel(
                 )
             }
         }
+    }
+    fun clearError() {
+         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    fun dispose() {
+        viewModelScope.cancel()
     }
 }
 
