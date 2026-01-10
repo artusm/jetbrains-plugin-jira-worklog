@@ -11,18 +11,21 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.popup.JBPopup
+import com.intellij.ui.JBColor
+import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
+import com.intellij.util.ui.FormBuilder
+import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import git4idea.repo.GitRepositoryManager
-import java.awt.Dimension
-import java.awt.FlowLayout
-import java.awt.GridLayout
+import java.awt.*
 import javax.swing.*
 
 /**
- * Inline popup content for committing worklog to Jira.
- * Adapted from TimeTrackerPopupContent to use JBPopup instead of DialogWrapper.
+ * Beautiful inline popup for committing worklog to Jira.
+ * Features clean layout, proper spacing, and professional appearance.
  */
-class CommitWorklogPopupContent(private val project: Project) : Box(BoxLayout.Y_AXIS) {
+class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLayout()) {
     
     var popup: JBPopup? = null
     
@@ -33,67 +36,87 @@ class CommitWorklogPopupContent(private val project: Project) : Box(BoxLayout.Y_
     
     private val taskComboBox = ComboBox<JiraIssue>(DefaultComboBoxModel())
     private val timeField = JBTextField()
-    private val commentArea = JTextArea(3, 30)
+    private val commentArea = JTextArea(4, 40)
     
     private var currentTimeMs: Long = 0L
     
     init {
         currentTimeMs = timerService.getTotalTimeMs()
         
-        // Add padding border
-        border = BorderFactory.createEmptyBorder(5, 10, 5, 10)
+        // Main panel with proper padding
+        border = JBUI.Borders.empty(16, 20)
         
-        // Create form panel
-        val formPanel = JPanel(GridLayout(0, 2, 4, 4))
-        add(formPanel)
+        // Create form with proper alignment
+        val formPanel = createFormPanel()
+        add(formPanel, BorderLayout.CENTER)
         
-        // Jira Issue selector
-        formPanel.add(JLabel("Jira Issue:", JLabel.RIGHT))
-        formPanel.add(taskComboBox)
-        
-        // Time spent field
-        formPanel.add(JLabel("Time Spent:", JLabel.RIGHT))
-        timeField.preferredSize = Dimension(150, timeField.preferredSize.height)
-        updateTimeField()
-        formPanel.add(timeField)
-        
-        // Create time adjustment buttons
-        val timeButtons = Box.createHorizontalBox()
-        add(timeButtons)
-        
-        timeButtons.add(JLabel("Quick adjust: "))
-        timeButtons.add(createTimeButton("+1h", 3600 * 1000))
-        timeButtons.add(createTimeButton("-1h", -3600 * 1000))
-        timeButtons.add(createTimeButton("+30m", 30 * 60 * 1000))
-        timeButtons.add(createTimeButton("×2") { currentTimeMs *= 2 })
-        timeButtons.add(createTimeButton("÷2") { currentTimeMs /= 2 })
-        
-        // Comment field
-        val commentPanel = JPanel()
-        commentPanel.layout = BoxLayout(commentPanel, BoxLayout.Y_AXIS)
-        commentPanel.add(JLabel("Comment:"))
-        commentArea.lineWrap = true
-        commentArea.wrapStyleWord = true
-        val scrollPane = JScrollPane(commentArea)
-        scrollPane.preferredSize = Dimension(300, 60)
-        commentPanel.add(scrollPane)
-        add(commentPanel)
-        
-        // Submit button
-        val submitPanel = JPanel(FlowLayout(FlowLayout.RIGHT))
-        val submitButton = JButton("Submit Worklog")
-        submitButton.addActionListener {
-            submitWorklog()
-        }
-        submitPanel.add(submitButton)
-        add(submitPanel)
+        // Create action panel with submit button
+        val actionPanel = createActionPanel()
+        add(actionPanel, BorderLayout.SOUTH)
         
         // Load initial data
         loadInitialData()
     }
     
-    private fun createTimeButton(label: String, deltaMs: Long): JButton {
+    private fun createFormPanel(): JPanel {
+        val panel = JPanel()
+        panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
+        
+        // Jira Issue selector
+        panel.add(createLabeledRow("Jira Issue:", taskComboBox))
+        panel.add(Box.createVerticalStrut(12))
+        
+        // Time spent field
+        timeField.preferredSize = Dimension(200, timeField.preferredSize.height)
+        updateTimeField()
+        panel.add(createLabeledRow("Time Spent:", timeField))
+        panel.add(Box.createVerticalStrut(12))
+        
+        // Quick adjust buttons
+        val quickAdjustPanel = createQuickAdjustPanel()
+        panel.add(createLabeledRow("Quick adjust:", quickAdjustPanel))
+        panel.add(Box.createVerticalStrut(12))
+        
+        // Comment field
+        val commentPanel = createCommentPanel()
+        panel.add(createLabeledRow("Comment:", commentPanel))
+        
+        return panel
+    }
+    
+    private fun createLabeledRow(labelText: String, component: JComponent): JPanel {
+        val row = JPanel(BorderLayout())
+        row.maximumSize = Dimension(Int.MAX_VALUE, component.preferredSize.height)
+        
+        // Label with fixed width for alignment
+        val label = JBLabel(labelText)
+        label.preferredSize = Dimension(100, label.preferredSize.height)
+        label.horizontalAlignment = SwingConstants.RIGHT
+        label.border = JBUI.Borders.emptyRight(8)
+        
+        row.add(label, BorderLayout.WEST)
+        row.add(component, BorderLayout.CENTER)
+        
+        return row
+    }
+    
+    private fun createQuickAdjustPanel(): JPanel {
+        val panel = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0))
+        panel.background = UIUtil.getPanelBackground()
+        
+        // Create styled buttons
+        panel.add(createStyledButton("+1h", 3600 * 1000))
+        panel.add(createStyledButton("-1h", -3600 * 1000))
+        panel.add(createStyledButton("+30m", 30 * 60 * 1000))
+        panel.add(createStyledButton("×2") { currentTimeMs *= 2 })
+        panel.add(createStyledButton("÷2") { currentTimeMs /= 2 })
+        
+        return panel
+    }
+    
+    private fun createStyledButton(label: String, deltaMs: Long): JButton {
         val button = JButton(label)
+        styleButton(button)
         button.addActionListener {
             currentTimeMs = maxOf(0, currentTimeMs + deltaMs)
             updateTimeField()
@@ -101,14 +124,52 @@ class CommitWorklogPopupContent(private val project: Project) : Box(BoxLayout.Y_
         return button
     }
     
-    private fun createTimeButton(label: String, action: () -> Unit): JButton {
+    private fun createStyledButton(label: String, action: () -> Unit): JButton {
         val button = JButton(label)
+        styleButton(button)
         button.addActionListener {
             action()
             currentTimeMs = maxOf(0, currentTimeMs)
             updateTimeField()
         }
         return button
+    }
+    
+    private fun styleButton(button: JButton) {
+        button.preferredSize = Dimension(70, 28)
+        button.font = button.font.deriveFont(12f)
+        button.isFocusPainted = false
+    }
+    
+    private fun createCommentPanel(): JPanel {
+        val panel = JPanel(BorderLayout())
+        
+        commentArea.lineWrap = true
+        commentArea.wrapStyleWord = true
+        commentArea.border = JBUI.Borders.empty(4)
+        
+        val scrollPane = JScrollPane(commentArea)
+        scrollPane.preferredSize = Dimension(400, 80)
+        scrollPane.border = JBUI.Borders.customLine(JBColor.border(), 1)
+        
+        panel.add(scrollPane, BorderLayout.CENTER)
+        return panel
+    }
+    
+    private fun createActionPanel(): JPanel {
+        val panel = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0))
+        panel.border = JBUI.Borders.emptyTop(16)
+        
+        val submitButton = JButton("Submit Worklog")
+        submitButton.preferredSize = Dimension(140, 32)
+        submitButton.font = submitButton.font.deriveFont(Font.BOLD, 13f)
+        submitButton.isFocusPainted = false
+        submitButton.addActionListener {
+            submitWorklog()
+        }
+        
+        panel.add(submitButton)
+        return panel
     }
     
     private fun updateTimeField() {
@@ -242,5 +303,9 @@ class CommitWorklogPopupContent(private val project: Project) : Box(BoxLayout.Y_
                 }
             }
         }.start()
+    }
+    
+    override fun getPreferredSize(): Dimension {
+        return Dimension(500, 280)
     }
 }

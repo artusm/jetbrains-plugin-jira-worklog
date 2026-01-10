@@ -134,9 +134,8 @@ class JiraWorklogWidget(
     }
 
     private fun showSettings() {
-        // TODO: Implement settings popup/dialog
-        // For now, just a placeholder
-        println("Settings - to be implemented")
+        com.intellij.openapi.options.ShowSettingsUtil.getInstance()
+            .showSettingsDialog(project, com.github.artusm.jetbrainspluginjiraworklog.config.JiraWorklogConfigurable::class.java)
     }
 
     override fun ID(): String = ID
