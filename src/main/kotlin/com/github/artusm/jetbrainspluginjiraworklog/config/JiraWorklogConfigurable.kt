@@ -1,6 +1,7 @@
 package com.github.artusm.jetbrainspluginjiraworklog.config
 
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraApiClient
+import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.options.Configurable
@@ -38,7 +39,7 @@ class JiraWorklogConfigurable : Configurable {
     
     private var mainPanel: JPanel? = null
     
-    override fun getDisplayName(): String = "Jira Worklog Timer"
+    override fun getDisplayName(): String = MyBundle.message("settings.title")
     
     override fun createComponent(): JComponent {
         val panel = JPanel(BorderLayout())
@@ -53,13 +54,13 @@ class JiraWorklogConfigurable : Configurable {
         contentPanel.add(Box.createVerticalStrut(20))
         
         // Jira configuration section
-        contentPanel.add(createSectionLabel("Jira Configuration"))
+        contentPanel.add(createSectionLabel(MyBundle.message("settings.section.jira")))
         contentPanel.add(Box.createVerticalStrut(8))
         contentPanel.add(createJiraConfigSection())
         contentPanel.add(Box.createVerticalStrut(24))
         
         // Auto-pause section
-        contentPanel.add(createSectionLabel("Auto-Pause Settings"))
+        contentPanel.add(createSectionLabel(MyBundle.message("settings.section.autopause")))
         contentPanel.add(Box.createVerticalStrut(8))
         contentPanel.add(createAutoPauseSection())
         
@@ -77,11 +78,11 @@ class JiraWorklogConfigurable : Configurable {
         panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
         panel.alignmentX = Component.LEFT_ALIGNMENT
         
-        val titleLabel = JBLabel("Jira Worklog Timer")
+        val titleLabel = JBLabel(MyBundle.message("settings.title"))
         titleLabel.font = titleLabel.font.deriveFont(Font.BOLD, 18f)
         titleLabel.alignmentX = Component.LEFT_ALIGNMENT
         
-        val descLabel = JBLabel("Track time in your IDE status bar and submit worklogs to Jira")
+        val descLabel = JBLabel(MyBundle.message("settings.description"))
         descLabel.foreground = UIUtil.getContextHelpForeground()
         descLabel.alignmentX = Component.LEFT_ALIGNMENT
         
@@ -108,15 +109,21 @@ class JiraWorklogConfigurable : Configurable {
         
         // Jira URL field
         jiraUrlField = JBTextField(settings.getJiraUrl(), 40)
-        panel.add(createFieldRow("Jira Instance URL:", jiraUrlField!!,
-            "Example: https://company.atlassian.net"))
+        panel.add(createFieldRow(
+            MyBundle.message("settings.jira.url.label"), 
+            jiraUrlField!!,
+            MyBundle.message("settings.jira.url.hint")
+        ))
         panel.add(Box.createVerticalStrut(12))
         
         // Token field
         tokenField = JBPasswordField()
         settings.getPersonalAccessToken()?.let { tokenField?.text = it }
-        panel.add(createFieldRow("Personal Access Token:", tokenField!!,
-            "Used for authentication with Jira API"))
+        panel.add(createFieldRow(
+            MyBundle.message("settings.jira.token.label"), 
+            tokenField!!,
+            MyBundle.message("settings.jira.token.hint")
+        ))
         panel.add(Box.createVerticalStrut(8))
         
         // Token generation link
@@ -124,7 +131,7 @@ class JiraWorklogConfigurable : Configurable {
         linkPanel.alignmentX = Component.LEFT_ALIGNMENT
         linkPanel.isOpaque = false
         
-        val linkLabel = LinkLabel.create("Generate Personal Access Token") {
+        val linkLabel = LinkLabel.create(MyBundle.message("settings.jira.token.link")) {
             BrowserUtil.browse("https://id.atlassian.com/manage-profile/security/api-tokens")
         }
         linkLabel.icon = AllIcons.General.Web
@@ -137,7 +144,7 @@ class JiraWorklogConfigurable : Configurable {
         testPanel.alignmentX = Component.LEFT_ALIGNMENT
         testPanel.isOpaque = false
         
-        testConnectionButton = JButton("Test Connection")
+        testConnectionButton = JButton(MyBundle.message("settings.jira.test"))
         testConnectionButton?.addActionListener { testConnection() }
         testPanel.add(testConnectionButton)
         
@@ -157,22 +164,22 @@ class JiraWorklogConfigurable : Configurable {
         panel.border = JBUI.Borders.empty(12, 16)
         panel.background = UIUtil.getPanelBackground()
         
-        pauseOnFocusCheckbox = JBCheckBox("Pause timer when IDE window loses focus", settings.isPauseOnFocusLoss())
+        pauseOnFocusCheckbox = JBCheckBox(MyBundle.message("settings.autopause.focus"), settings.isPauseOnFocusLoss())
         pauseOnFocusCheckbox?.alignmentX = Component.LEFT_ALIGNMENT
         panel.add(pauseOnFocusCheckbox)
         panel.add(Box.createVerticalStrut(8))
         
-        pauseOnBranchCheckbox = JBCheckBox("Pause timer when switching Git branches", settings.isPauseOnBranchChange())
+        pauseOnBranchCheckbox = JBCheckBox(MyBundle.message("settings.autopause.branch"), settings.isPauseOnBranchChange())
         pauseOnBranchCheckbox?.alignmentX = Component.LEFT_ALIGNMENT
         panel.add(pauseOnBranchCheckbox)
         panel.add(Box.createVerticalStrut(8))
         
-        pauseOnProjectCheckbox = JBCheckBox("Pause timer when switching projects", settings.isPauseOnProjectSwitch())
+        pauseOnProjectCheckbox = JBCheckBox(MyBundle.message("settings.autopause.project"), settings.isPauseOnProjectSwitch())
         pauseOnProjectCheckbox?.alignmentX = Component.LEFT_ALIGNMENT
         panel.add(pauseOnProjectCheckbox)
         panel.add(Box.createVerticalStrut(8))
         
-        pauseOnSystemSleepCheckbox = JBCheckBox("Pause timer when system goes to sleep (Mac/Linux/Windows)", settings.isPauseOnSystemSleep())
+        pauseOnSystemSleepCheckbox = JBCheckBox(MyBundle.message("settings.autopause.sleep"), settings.isPauseOnSystemSleep())
         pauseOnSystemSleepCheckbox?.alignmentX = Component.LEFT_ALIGNMENT
         panel.add(pauseOnSystemSleepCheckbox)
         
@@ -247,19 +254,19 @@ class JiraWorklogConfigurable : Configurable {
         val token = String(tokenField?.password ?: charArrayOf()).trim()
         
         if (url.isBlank()) {
-            showConnectionStatus(false, "Please enter Jira URL")
+            showConnectionStatus(false, MyBundle.message("settings.connection.enter.url"))
             return
         }
         
         if (token.isBlank()) {
-            showConnectionStatus(false, "Please enter Personal Access Token")
+            showConnectionStatus(false, MyBundle.message("settings.connection.enter.token"))
             return
         }
         
         // Disable button during test
         testConnectionButton?.isEnabled = false
         connectionStatusLabel?.isVisible = true
-        connectionStatusLabel?.text = "Testing connection..."
+        connectionStatusLabel?.text = MyBundle.message("settings.jira.testing")
         connectionStatusLabel?.icon = AllIcons.Process.Step_1
         connectionStatusLabel?.foreground = UIUtil.getLabelForeground()
         
@@ -285,9 +292,9 @@ class JiraWorklogConfigurable : Configurable {
                 SwingUtilities.invokeLater {
                     testConnectionButton?.isEnabled = true
                     if (result.isSuccess) {
-                        showConnectionStatus(true, "Connection successful!")
+                        showConnectionStatus(true, MyBundle.message("settings.connection.success"))
                     } else {
-                        showConnectionStatus(false, "Connection failed: ${result.exceptionOrNull()?.message}")
+                        showConnectionStatus(false, MyBundle.message("settings.connection.failed", result.exceptionOrNull()?.message ?: ""))
                     }
                 }
             }

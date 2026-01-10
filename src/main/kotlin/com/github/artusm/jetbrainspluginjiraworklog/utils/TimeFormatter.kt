@@ -42,8 +42,9 @@ object TimeFormatter {
     fun formatJira(totalMs: Long): String {
         val totalSeconds = totalMs / 1000
         
+        // Jira requires minimum 1 minute
         if (totalSeconds < 60) {
-            return "${totalSeconds}s"
+            return "1m"
         }
         
         val hours = totalSeconds / 3600
