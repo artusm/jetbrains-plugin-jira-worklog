@@ -4,7 +4,7 @@ import com.intellij.openapi.components.Service
 
 /**
  * Service for parsing Jira issue keys from Git branch names.
- * Priority: Matches subtask key (second match) then parent key (first match).
+ * Priority: Matches subtask key (last match) then parent key (first match).
  */
 @Service(Service.Level.APP)
 class GitBranchParser {
@@ -29,7 +29,7 @@ class GitBranchParser {
         return when (matches.size) {
             0 -> ParseResult()
             1 -> ParseResult(parentKey = matches[0])
-            else -> ParseResult(subtaskKey = matches[1], parentKey = matches[0])
+            else -> ParseResult(subtaskKey = matches.last(), parentKey = matches[0])
         }
     }
     
