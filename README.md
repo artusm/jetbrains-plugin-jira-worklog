@@ -41,8 +41,9 @@ Fast action buttons in commit popup:
 - **Secure credential storage** using IntelliJ's PasswordSafe
 - **Auto-pause toggles**:
   - Pause on Git branch change
-  - Pause on window focus loss (planned)
-  - Pause on project switch (planned)
+  - Pause on window focus loss
+  - Pause on project switch
+  - Pause on system sleep
 
 ### 🚀 Onboarding
 - **First-run setup** dialog for Jira credentials
@@ -176,8 +177,6 @@ Contributions are welcome! Please:
 ## Roadmap
 
 ### Planned Features
-- [ ] Window focus auto-pause
-- [ ] Project switch auto-pause  
 - [ ] Worklog history viewer
 - [ ] Time reports per issue/project
 - [ ] Offline mode with queue
@@ -193,6 +192,9 @@ Contributions are welcome! Please:
 - [x] Settings configuration
 - [x] Onboarding flow
 - [x] Auto-pause on branch change
+- [x] Auto-pause on window focus loss
+- [x] Auto-pause on project switch
+- [x] Auto-pause on system sleep
 
 ## License
 
