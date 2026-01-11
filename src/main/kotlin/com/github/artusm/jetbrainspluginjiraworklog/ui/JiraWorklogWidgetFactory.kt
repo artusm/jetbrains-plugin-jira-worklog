@@ -32,11 +32,14 @@ class JiraWorklogWidgetFactory : StatusBarWidgetFactory {
 
     @NotNull
     override fun createWidget(@NotNull project: Project): StatusBarWidget {
-        return project.getService(JiraWorklogTimerService::class.java).widget()
+        val service = project.service<JiraWorklogTimerService>()
+        return JiraWorklogWidget(service, project)
     }
 
     override fun disposeWidget(@NotNull widget: StatusBarWidget) {
-        // Widget disposal is handled by the service
+        if (widget is JiraWorklogWidget) {
+            widget.dispose()
+        }
     }
 
     override fun canBeEnabledOn(@NotNull statusBar: StatusBar): Boolean {
