@@ -7,9 +7,13 @@ import com.intellij.openapi.diagnostic.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.IOException
 import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -167,7 +171,7 @@ class JiraApiClient(private val settings: JiraConfig) : JiraApi {
     }
     
     private fun executeGet(url: String, token: String): String {
-        val connection = URL(url).openConnection() as HttpURLConnection
+        val connection = URI(url).toURL().openConnection() as HttpURLConnection
         
         try {
             connection.requestMethod = "GET"
@@ -182,16 +186,45 @@ class JiraApiClient(private val settings: JiraConfig) : JiraApi {
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 return connection.inputStream.bufferedReader().use { it.readText() }
             } else {
-                val errorStream = connection.errorStream?.bufferedReader()?.use { it.readText() }
-                throw IOException("HTTP $responseCode: $errorStream")
+                val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() }
+                val message = parseErrorMessage(errorBody) ?: errorBody
+                throw IOException("HTTP $responseCode: $message")
             }
         } finally {
             connection.disconnect()
         }
     }
+
+    private fun parseErrorMessage(jsonBody: String?): String? {
+        if (jsonBody.isNullOrBlank()) return null
+        return try {
+            val jsonObject = json.parseToJsonElement(jsonBody).jsonObject
+
+            // Try "errorMessages" array (common in Jira)
+            val errorMessages = jsonObject["errorMessages"]?.jsonArray
+            if (errorMessages != null && errorMessages.isNotEmpty()) {
+                return errorMessages.joinToString("; ") { it.jsonPrimitive.content }
+            }
+
+            // Try "message" string
+            val message = jsonObject["message"]?.jsonPrimitive?.content
+            if (message != null) return message
+
+            // Try "errors" map (field errors)
+            val errors = jsonObject["errors"]?.jsonObject
+            if (errors != null && errors.isNotEmpty()) {
+                return errors.entries.joinToString("; ") { "${it.key}: ${it.value.jsonPrimitive.content}" }
+            }
+
+            null
+        } catch (e: Exception) {
+            // If parsing fails, return null so caller uses raw body
+            null
+        }
+    }
     
     private fun executePost(url: String, token: String, requestBody: String): String {
-        val connection = URL(url).openConnection() as HttpURLConnection
+        val connection = URI(url).toURL().openConnection() as HttpURLConnection
         
         try {
             connection.requestMethod = "POST"
@@ -213,8 +246,9 @@ class JiraApiClient(private val settings: JiraConfig) : JiraApi {
             if (responseCode == HttpURLConnection.HTTP_CREATED || responseCode == HttpURLConnection.HTTP_OK) {
                 return connection.inputStream.bufferedReader().use { it.readText() }
             } else {
-                val errorStream = connection.errorStream?.bufferedReader()?.use { it.readText() }
-                throw IOException("HTTP $responseCode: $errorStream")
+                val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() }
+                val message = parseErrorMessage(errorBody) ?: errorBody
+                throw IOException("HTTP $responseCode: $message")
             }
         } finally {
             connection.disconnect()

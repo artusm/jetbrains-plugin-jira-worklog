@@ -67,11 +67,21 @@ class GitBranchParserTest {
     }
     
     @Test
-    fun `test parse with multiple keys prefers second`() {
+    fun `test parse with multiple keys prefers last as subtask`() {
+        // Updated behavior: last key is subtask/primary
         val result = parser.parseBranchName("ABC-111/DEF-222/GHI-333")
         
-        // Should pick second key as subtask, first as parent
-        assertEquals("DEF-222", result.subtaskKey)
+        assertEquals("GHI-333", result.subtaskKey)
         assertEquals("ABC-111", result.parentKey)
+        assertEquals("GHI-333", result.getPrimaryKey())
+    }
+
+    @Test
+    fun `test parse with many keys prefers last as subtask`() {
+        val result = parser.parseBranchName("ABC-1/DEF-2/GHI-3/JKL-4")
+
+        assertEquals("JKL-4", result.subtaskKey)
+        assertEquals("ABC-1", result.parentKey)
+        assertEquals("JKL-4", result.getPrimaryKey())
     }
 }

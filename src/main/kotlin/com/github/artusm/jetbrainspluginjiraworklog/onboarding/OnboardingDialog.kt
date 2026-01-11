@@ -24,7 +24,7 @@ import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
-import java.net.URL
+import java.net.URI
 import javax.swing.*
 
 /**
@@ -210,10 +210,8 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
     
     private fun createInfoPanel(): JPanel {
         val infoPanel = JPanel(BorderLayout(JBUI.scale(12), 0))
-        infoPanel.background = JBColor.lazy { 
-            if (UIUtil.isUnderDarcula()) JBColor(0x2D3748, 0x2D3748) 
-            else JBColor(0xEBF5FF, 0xEBF5FF)
-        }
+        // Light theme: 0xEBF5FF, Dark theme: 0x2D3748
+        infoPanel.background = JBColor(0xEBF5FF, 0x2D3748)
         infoPanel.border = JBUI.Borders.empty(12)
         infoPanel.alignmentX = Component.LEFT_ALIGNMENT
         
@@ -252,7 +250,7 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
         }
         
         try {
-            val parsedUrl = URL(url)
+            val parsedUrl = URI(url).toURL()
             
             when {
                 !parsedUrl.protocol.equals("https", ignoreCase = true) -> {
@@ -281,17 +279,15 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
     private fun showFeedback(message: String, isError: Boolean) {
         feedbackPanel.removeAll()
         feedbackPanel.layout = BorderLayout(JBUI.scale(8), 0)
+
         feedbackPanel.background = if (isError) {
-            JBColor.lazy { 
-                if (UIUtil.isUnderDarcula()) JBColor(0x5C2626, 0x5C2626)
-                else JBColor(0xFFF5F5, 0xFFF5F5)
-            }
+            // Error bg: Light 0xFFF5F5, Dark 0x5C2626
+            JBColor(0xFFF5F5, 0x5C2626)
         } else {
-            JBColor.lazy { 
-                if (UIUtil.isUnderDarcula()) JBColor(0x1E4620, 0x1E4620)
-                else JBColor(0xF0FFF4, 0xF0FFF4)
-            }
+            // Success bg: Light 0xF0FFF4, Dark 0x1E4620
+            JBColor(0xF0FFF4, 0x1E4620)
         }
+
         feedbackPanel.border = JBUI.Borders.empty(12)
         
         val icon = if (isError) AllIcons.General.Error else AllIcons.General.InspectionsOK
