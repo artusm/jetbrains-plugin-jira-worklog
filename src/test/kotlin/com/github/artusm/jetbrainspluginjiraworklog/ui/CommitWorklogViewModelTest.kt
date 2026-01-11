@@ -2,137 +2,111 @@ package com.github.artusm.jetbrainspluginjiraworklog.ui
 
 import com.github.artusm.jetbrainspluginjiraworklog.data.WorklogRepository
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssue
+import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueFields
+import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueType
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraSearchResult
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraWorklogResponse
-import com.github.artusm.jetbrainspluginjiraworklog.model.TimeTrackingStatus
-import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState
 import com.github.artusm.jetbrainspluginjiraworklog.services.TimerService
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import io.mockk.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class CommitWorklogViewModelTest {
 
     private lateinit var viewModel: CommitWorklogViewModel
-    private lateinit var fakeTimerService: FakeTimerService
+    private lateinit var mockRepository: WorklogRepository
+    private lateinit var mockTimerService: TimerService
+    private val branchProvider: () -> String? = { "feature/branch" }
+    private val testDispatcher = UnconfinedTestDispatcher()
 
     @Before
-    fun setup() {
-        // Create instance-based state for isolation between tests
-        val state = JiraWorklogPersistentState().apply {
-            setStatus(TimeTrackingStatus.STOPPED)
-            setTotalTimeMs(5000L)
-        }
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
         
-        fakeTimerService = FakeTimerService(state)
+        mockRepository = mockk(relaxed = true)
+        mockTimerService = mockk(relaxed = true)
         
-        val fakeApi = FakeJiraApi()
+        every { mockTimerService.getTotalTimeMs() } returns 3600000L // 1 hour
         
-        // Use instance state for setup
-        state.saveIssueForBranch("feature/test", "JIRA-1")
-        state.setLastIssueKey("JIRA-1")
+        viewModel = CommitWorklogViewModel(mockRepository, mockTimerService, branchProvider)
+    }
 
-        // Create fake repository based on interface
-        val realRepository = object : WorklogRepository {
-             private val api = fakeApi
-             private val persistentState = state
-             
-             override suspend fun getAssignedIssues(): Result<JiraSearchResult> = api.searchAssignedIssues()
-             override suspend fun getIssue(issueKey: String): Result<JiraIssue> = api.getIssueWithSubtasks(issueKey)
-             override suspend fun submitWorklog(issueKey: String, timeSpentSeconds: Int, comment: String?): Result<JiraWorklogResponse> =
-                 api.submitWorklog(issueKey, timeSpentSeconds, comment)
-                 
-             override fun saveSelectedIssue(issueKey: String, branchName: String?) {
-                 persistentState.setLastIssueKey(issueKey)
-                 if (branchName != null) persistentState.saveIssueForBranch(branchName, issueKey)
-             }
-             
-             override fun getSavedIssueKey(branchName: String?): String? {
-                 return branchName?.let { persistentState.getIssueForBranch(it) } ?: persistentState.getLastIssueKey()
-             }
-        }
-        
-        viewModel = CommitWorklogViewModel(
-            realRepository,
-            fakeTimerService,
-            { "feature/test" }
-        )
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     @Test
-    fun testInitialTimeLoad() {
-        assertEquals(5000L, viewModel.uiState.value.timeSpentMs)
-    }
-    
-    @Test
-    fun testTimeAdjustment() {
-        viewModel.adjustTime(1000)
-        assertEquals(6000L, viewModel.uiState.value.timeSpentMs)
-        
-        viewModel.adjustTime(-2000)
-        assertEquals(4000L, viewModel.uiState.value.timeSpentMs)
+    fun `test initial data load`() {
+        val issue = JiraIssue("PROJ-1", JiraIssueFields("Summary", JiraIssueType("Task", false), emptyList()))
+        coEvery { mockRepository.getAssignedIssues() } returns Result.success(JiraSearchResult(listOf(issue), 1))
+        coEvery { mockRepository.getSavedIssueKey(any()) } returns "PROJ-1"
+        coEvery { mockRepository.getIssue("PROJ-1") } returns Result.success(issue)
+
+        viewModel.loadInitialData()
+
+        assertEquals(issue, viewModel.uiState.value.selectedIssue)
+        assertEquals(3600000L, viewModel.uiState.value.timeSpentMs)
     }
 
-    // Fakes
-    class FakeJiraApi : com.github.artusm.jetbrainspluginjiraworklog.jira.JiraApi {
-        private val taskType = com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueType("Task", false)
-        private val bugType = com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueType("Bug", false)
+    @Test
+    fun `test adjust time`() {
+        viewModel.updateTime(3600000L)
+        assertEquals(3600000L, viewModel.uiState.value.timeSpentMs)
+
+        viewModel.adjustTime(60000L) // Add 1 min
+        assertEquals(3660000L, viewModel.uiState.value.timeSpentMs)
         
-        var issuesToReturn = listOf(
-            JiraIssue("JIRA-1", com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueFields("Task 1", taskType)),
-            JiraIssue("JIRA-2", com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssueFields("Task 2", bugType))
+        viewModel.adjustTime(-60000L) // Remove 1 min
+        assertEquals(3600000L, viewModel.uiState.value.timeSpentMs)
+    }
+
+    @Test
+    fun `test submit worklog success`() {
+        val issue = JiraIssue("PROJ-1", JiraIssueFields("Summary", JiraIssueType("Task", false), emptyList()))
+        
+        // Setup initial state
+        viewModel.selectIssue(issue)
+        viewModel.updateTime(3600000L)
+        viewModel.updateComment("Done")
+
+        coEvery { mockRepository.submitWorklog("PROJ-1", 3600, "Done") } returns Result.success(
+            JiraWorklogResponse("http://self", "user", "user")
         )
 
-        override suspend fun searchAssignedIssues(jql: String, maxResults: Int): Result<JiraSearchResult> {
-            return Result.success(JiraSearchResult(issuesToReturn, issuesToReturn.size))
-        }
+        var successCallbackCalled = false
+        viewModel.submitWorklog { successCallbackCalled = true }
 
-        override suspend fun getIssueWithSubtasks(issueKey: String): Result<JiraIssue> {
-            val issue = issuesToReturn.firstOrNull { it.key == issueKey }
-            return if (issue != null) {
-                Result.success(issue)
-            } else {
-                Result.failure(NoSuchElementException("Issue not found: $issueKey"))
-            }
-        }
-
-        override suspend fun submitWorklog(issueKey: String, timeSpentSeconds: Int, comment: String?): Result<JiraWorklogResponse> {
-            return Result.success(JiraWorklogResponse("100", issueKey, "${timeSpentSeconds / 3600}h"))
-        }
-
-        override suspend fun testConnection(): Result<Boolean> {
-            return Result.success(true)
-        }
+        verify { mockTimerService.reset() }
+        assertTrue(successCallbackCalled)
+        coVerify { mockRepository.saveSelectedIssue("PROJ-1", any()) }
     }
 
-    class FakeTimerService(private val state: JiraWorklogPersistentState) : TimerService {
+    @Test
+    fun `test submit worklog failure`() {
+        val issue = JiraIssue("PROJ-1", JiraIssueFields("Summary", JiraIssueType("Task", false), emptyList()))
         
-        private val _timeFlow = MutableStateFlow(state.getTotalTimeMs())
-        override val timeFlow: StateFlow<Long> = _timeFlow.asStateFlow()
+        // Setup initial state
+        viewModel.selectIssue(issue)
         
-        private val _statusFlow = MutableStateFlow(state.getStatus())
-        override val statusFlow: StateFlow<TimeTrackingStatus> = _statusFlow.asStateFlow()
+        coEvery { mockRepository.submitWorklog(any(), any(), any()) } returns Result.failure(Exception("Failed"))
 
-        override fun getStatus(): TimeTrackingStatus = _statusFlow.value
-        override fun getTotalTimeMs(): Long = _timeFlow.value
-        override fun getTotalTimeSeconds(): Int = (_timeFlow.value / 1000).toInt()
-        override fun toggleRunning() {}
-        override fun setStatus(status: TimeTrackingStatus) { _statusFlow.value = status }
-        override fun pause() {}
-        override fun resume() {}
-        override fun reset() { 
-            _timeFlow.value = 0L
-            state.setTotalTimeMs(0L)
-        }
-        override fun addTimeMs(timeMs: Long) {
-            _timeFlow.value += timeMs
-            state.setTotalTimeMs(_timeFlow.value)
-        }
-        override fun autoPauseByFocus() {}
-        override fun autoResumeFromFocus() {}
-        override fun autoPauseByProjectSwitch() {}
+        var successCallbackCalled = false
+        viewModel.submitWorklog { successCallbackCalled = true }
+
+        assertNotNull(viewModel.uiState.value.error)
+        verify(exactly = 0) { mockTimerService.reset() }
+        assertFalse(successCallbackCalled)
     }
 }

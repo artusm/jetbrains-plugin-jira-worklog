@@ -2,6 +2,8 @@ package com.github.artusm.jetbrainspluginjiraworklog.services
 
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.model.TimeTrackingStatus
+import com.github.artusm.jetbrainspluginjiraworklog.utils.SystemTimeProvider
+import com.github.artusm.jetbrainspluginjiraworklog.utils.TimeProvider
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
@@ -14,8 +16,15 @@ import kotlinx.coroutines.flow.update
 @Service(Service.Level.PROJECT)
 class JiraWorklogTimerService(
     private val project: Project,
-    private val coroutineScope: CoroutineScope
+    private val coroutineScope: CoroutineScope,
+    private val timeProvider: TimeProvider
 ) : CoroutineScope, TimerService {
+
+    constructor(project: Project, coroutineScope: CoroutineScope) : this(
+        project,
+        coroutineScope,
+        SystemTimeProvider()
+    )
     
     override val coroutineContext = coroutineScope.coroutineContext
     
@@ -48,7 +57,7 @@ class JiraWorklogTimerService(
     
     private fun startTicking() {
         tickerJob?.cancel()
-        lastTickTime = System.currentTimeMillis()
+        lastTickTime = timeProvider.currentTimeMillis()
         
         tickerJob = launch {
             while (isActive) {
@@ -64,7 +73,7 @@ class JiraWorklogTimerService(
     }
     
     private fun tick() {
-        val now = System.currentTimeMillis()
+        val now = timeProvider.currentTimeMillis()
         val elapsed = now - lastTickTime
         
         // Check for abnormal time gap indicating system sleep
@@ -110,7 +119,7 @@ class JiraWorklogTimerService(
     }
     
     override fun setStatus(status: TimeTrackingStatus) {
-        val now = System.currentTimeMillis()
+        val now = timeProvider.currentTimeMillis()
         
         _statusFlow.value = status
         persistentState.setStatus(status)

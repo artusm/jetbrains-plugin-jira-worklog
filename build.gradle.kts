@@ -36,6 +36,8 @@ dependencies {
     
     testImplementation(libs.junit)
     testImplementation(libs.opentest4j)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
@@ -50,7 +52,16 @@ dependencies {
         // Module Dependencies. Uses `platformBundledModules` property from the gradle.properties file for bundled IntelliJ Platform modules.
         bundledModules(providers.gradleProperty("platformBundledModules").map { it.split(',') })
 
-        testFramework(TestFrameworkType.Platform)
+        // testFramework(TestFrameworkType.Platform)
+    }
+}
+
+tasks {
+    test {
+        // Disable classloader isolation for tests to avoid conflicts
+        systemProperties.remove("java.system.class.loader")
+        useJUnit()
+        maxHeapSize = "256m"
     }
 }
 
