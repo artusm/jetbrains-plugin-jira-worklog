@@ -1,14 +1,8 @@
 package com.github.artusm.jetbrainspluginjiraworklog.ui
 
-import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
-import com.github.artusm.jetbrainspluginjiraworklog.git.GitBranchParser
-import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraApiClient
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssue
-import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState
-import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
 import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.github.artusm.jetbrainspluginjiraworklog.utils.TimeFormatter
-import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
@@ -16,36 +10,38 @@ import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
-import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
-import git4idea.repo.GitRepositoryManager
-import java.awt.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
+import java.awt.BorderLayout
+import java.awt.Dimension
+import java.awt.FlowLayout
+import java.awt.Font
 import javax.swing.*
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 
 /**
  * Beautiful inline popup for committing worklog to Jira.
  * Features clean layout, proper spacing, and professional appearance.
+ * Now acts as a View in MVVM, delegating logic to CommitWorklogViewModel.
  */
 class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLayout()) {
     
     var popup: JBPopup? = null
     
-    private val settings = JiraSettings.getInstance()
-    private val timerService = project.service<JiraWorklogTimerService>()
-    private val persistentState = project.service<JiraWorklogPersistentState>()
-    private val gitBranchParser = service<GitBranchParser>()
-    private val jiraClient = JiraApiClient(settings)
+    private val viewModel = CommitWorklogViewModel(project)
+    private val uiScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     
     private val taskComboBox = ComboBox<JiraIssue>(DefaultComboBoxModel())
     private val timeField = JBTextField()
     private val commentArea = JTextArea(4, 40)
     
-    private var currentTimeMs: Long = 0L
+    // UI components we need to update
+    private lateinit var submitButton: JButton
     
     init {
-        currentTimeMs = timerService.getTotalTimeMs()
-        
         // Main panel with proper padding
         border = JBUI.Borders.empty(16, 20)
         
@@ -57,13 +53,97 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         val actionPanel = createActionPanel()
         add(actionPanel, BorderLayout.SOUTH)
         
-        // Load initial data
-        loadInitialData()
+        // Setup listeners
+        setupListeners()
         
-        // Add selection listener to save selected issue per branch
+        // Start observing ViewModel state
+        observeViewModel()
+        
+        // Load initial data
+        viewModel.loadInitialData()
+    }
+    
+    private fun setupListeners() {
+        // Issue selection
         taskComboBox.addActionListener {
-            (taskComboBox.selectedItem as? JiraIssue)?.let { selectedIssue ->
-                saveSelectedIssueForCurrentBranch(selectedIssue.key)
+            if (taskComboBox.hasFocus() || taskComboBox.isPopupVisible) {
+                // Only update if user interaction or explicitly set
+                viewModel.selectIssue(taskComboBox.selectedItem as? JiraIssue)
+            }
+        }
+        
+        // Comment updates
+        commentArea.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent?) = updateComment()
+            override fun removeUpdate(e: DocumentEvent?) = updateComment()
+            override fun changedUpdate(e: DocumentEvent?) = updateComment()
+            
+            private fun updateComment() {
+                viewModel.updateComment(commentArea.text)
+            }
+        })
+    }
+    
+    private fun observeViewModel() {
+        uiScope.launch {
+            viewModel.uiState.collectLatest { state ->
+                // Update Issue List and Selection
+                val model = taskComboBox.model as DefaultComboBoxModel<JiraIssue>
+                
+                // Update elements only if changed to avoid flickering
+                if (model.size != state.issues.size || (0 until model.size).any { model.getElementAt(it) != state.issues[it] }) {
+                    val currentSelection = model.selectedItem
+                    model.removeAllElements()
+                    state.issues.forEach { model.addElement(it) }
+                    
+                    // Restore selection if it's still valid, or use state selection
+                    if (state.selectedIssue != null) {
+                        model.selectedItem = state.selectedIssue
+                    } else if (currentSelection in state.issues) {
+                        model.selectedItem = currentSelection
+                    }
+                } else if (model.selectedItem != state.selectedIssue) {
+                    model.selectedItem = state.selectedIssue
+                }
+                
+                // Update Time Field
+                timeField.text = TimeFormatter.formatJira(state.timeSpentMs)
+                
+                // Update Comment
+                if (commentArea.text != state.comment) {
+                     commentArea.text = state.comment
+                }
+                
+                // Error Handling
+                if (state.error != null) {
+                    val errorMessage = state.error.message ?: MyBundle.message("error.general", "Unknown")
+                    com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                        Messages.showErrorDialog(
+                            this@CommitWorklogPopupContent,
+                            errorMessage,
+                            MyBundle.message("error.general.title")
+                        )
+                        viewModel.clearError()
+                    }
+                }
+                
+                // Success Handling
+                if (state.isSuccess) {
+                    val successMessage = MyBundle.message("commit.success", TimeFormatter.formatJira(state.timeSpentMs), state.selectedIssue?.key ?: "")
+                    com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                        Messages.showInfoMessage(
+                            this@CommitWorklogPopupContent,
+                            successMessage,
+                            MyBundle.message("commit.success.title")
+                        )
+                        popup?.cancel()
+                    }
+                }
+                
+                // Loading State
+                taskComboBox.isEnabled = !state.isLoading && !state.isSubmitting
+                submitButton.isEnabled = !state.isLoading && !state.isSubmitting
+                submitButton.text = if (state.isSubmitting) "Submitting..." else MyBundle.message("commit.button.submit")
             }
         }
     }
@@ -73,12 +153,13 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
         
         // Jira Issue selector
+        setupComboBoxRenderer()
         panel.add(createLabeledRow(MyBundle.message("commit.jira.issue"), taskComboBox))
         panel.add(Box.createVerticalStrut(12))
         
         // Time spent field
         timeField.preferredSize = Dimension(200, timeField.preferredSize.height)
-        updateTimeField()
+        timeField.isEditable = false // Read-only, driven by VM/Buttons for now
         panel.add(createLabeledRow(MyBundle.message("commit.time.spent"), timeField))
         panel.add(Box.createVerticalStrut(12))
         
@@ -92,6 +173,24 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         panel.add(createLabeledRow(MyBundle.message("commit.comment"), commentPanel))
         
         return panel
+    }
+    
+    private fun setupComboBoxRenderer() {
+        taskComboBox.renderer = object : DefaultListCellRenderer() {
+            override fun getListCellRendererComponent(
+                list: JList<*>?,
+                value: Any?,
+                index: Int,
+                isSelected: Boolean,
+                cellHasFocus: Boolean
+            ): java.awt.Component {
+                val component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
+                if (value is JiraIssue) {
+                    text = "${value.key} - ${value.summary}"
+                }
+                return component
+            }
+        }
     }
     
     private fun createLabeledRow(labelText: String, component: JComponent): JPanel {
@@ -115,33 +214,19 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         panel.background = UIUtil.getPanelBackground()
         
         // Create styled buttons
-        panel.add(createStyledButton(MyBundle.message("commit.button.+1h"), 3600 * 1000))
-        panel.add(createStyledButton(MyBundle.message("commit.button.-1h"), -3600 * 1000))
-        panel.add(createStyledButton(MyBundle.message("commit.button.+30m"), 30 * 60 * 1000))
-        panel.add(createStyledButton(MyBundle.message("commit.button.x2")) { currentTimeMs *= 2 })
-        panel.add(createStyledButton(MyBundle.message("commit.button.div2")) { currentTimeMs /= 2 })
+        panel.add(createStyledButton(MyBundle.message("commit.button.+1h")) { viewModel.adjustTime(3600 * 1000) })
+        panel.add(createStyledButton(MyBundle.message("commit.button.-1h")) { viewModel.adjustTime(-3600 * 1000) })
+        panel.add(createStyledButton(MyBundle.message("commit.button.+30m")) { viewModel.adjustTime(30 * 60 * 1000) })
+        panel.add(createStyledButton(MyBundle.message("commit.button.x2")) { viewModel.multiplyTime(2.0) })
+        panel.add(createStyledButton(MyBundle.message("commit.button.div2")) { viewModel.multiplyTime(0.5) })
         
         return panel
-    }
-    
-    private fun createStyledButton(label: String, deltaMs: Long): JButton {
-        val button = JButton(label)
-        styleButton(button)
-        button.addActionListener {
-            currentTimeMs = maxOf(0, currentTimeMs + deltaMs)
-            updateTimeField()
-        }
-        return button
     }
     
     private fun createStyledButton(label: String, action: () -> Unit): JButton {
         val button = JButton(label)
         styleButton(button)
-        button.addActionListener {
-            action()
-            currentTimeMs = maxOf(0, currentTimeMs)
-            updateTimeField()
-        }
+        button.addActionListener { action() }
         return button
     }
     
@@ -170,231 +255,24 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         val panel = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0))
         panel.border = JBUI.Borders.emptyTop(16)
         
-        val submitButton = JButton(MyBundle.message("commit.button.submit"))
+        submitButton = JButton(MyBundle.message("commit.button.submit"))
         submitButton.preferredSize = Dimension(140, 32)
         submitButton.font = submitButton.font.deriveFont(Font.BOLD, 13f)
         submitButton.isFocusPainted = false
         submitButton.addActionListener {
-            submitWorklog()
+            viewModel.submitWorklog {
+                // Actions after success handled in observer
+            }
         }
         
         panel.add(submitButton)
         return panel
     }
     
-    private fun updateTimeField() {
-        timeField.text = TimeFormatter.formatJira(currentTimeMs)
-    }
-    
-    private fun loadInitialData() {
-        // Get saved issue for current branch (or last issue as fallback)
-        val savedIssueKey = getSavedIssueForCurrentBranch()
-        
-        // Load issues with the saved/fallback key
-        loadIssues(savedIssueKey)
-    }
-    
-    private fun loadIssues(preselectedKey: String?) {
-        // Load in background
-        Thread {
-            val result = jiraClient.searchAssignedIssues()
-            
-            SwingUtilities.invokeLater {
-                if (!project.isDisposed) {
-                    if (result.isSuccess) {
-                        val issues = result.getOrNull()?.issues ?: emptyList()
-                        val model = taskComboBox.model as DefaultComboBoxModel<JiraIssue>
-                        
-                        issues.forEach { model.addElement(it) }
-                        
-                        // Set renderer to show key and summary
-                        taskComboBox.renderer = object : DefaultListCellRenderer() {
-                            override fun getListCellRendererComponent(
-                                list: JList<*>?,
-                                value: Any?,
-                                index: Int,
-                                isSelected: Boolean,
-                                cellHasFocus: Boolean
-                            ): java.awt.Component {
-                                val component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
-                                if (value is JiraIssue) {
-                                    text = "${value.key} - ${value.summary}"
-                                }
-                                return component
-                            }
-                        }
-                        
-                        // Preselect the issue from branch if found
-                        if (preselectedKey != null) {
-                            val matchingIssue = issues.find { it.key == preselectedKey }
-                            if (matchingIssue != null) {
-                                taskComboBox.selectedItem = matchingIssue
-                            } else {
-                                // Try to load the issue directly
-                                loadSpecificIssue(preselectedKey)
-                            }
-                        }
-                    } else {
-                        // Show friendly error message
-                        val error = result.exceptionOrNull()
-                        val errorMessage = getErrorMessage(error)
-                        val title = getErrorTitle(error)
-                        
-                        Messages.showErrorDialog(
-                            project,
-                            errorMessage,
-                            title
-                        )
-                    }
-                }
-            }
-        }.start()
-    }
-    
-    private fun loadSpecificIssue(issueKey: String) {
-        Thread {
-            val result = jiraClient.getIssueWithSubtasks(issueKey)
-            
-            SwingUtilities.invokeLater {
-                if (!project.isDisposed) {
-                    if (result.isSuccess) {
-                        val issue = result.getOrNull()
-                        if (issue != null) {
-                            val model = taskComboBox.model as DefaultComboBoxModel<JiraIssue>
-                            model.addElement(issue)
-                            taskComboBox.selectedItem = issue
-                            
-                            // Also add subtasks if available
-                            issue.fields.subtasks?.forEach { subtask ->
-                                model.addElement(subtask)
-                            }
-                        }
-                    } else {
-                        // Show error for specific issue lookup
-                        val error = result.exceptionOrNull()
-                        println("Failed to load issue $issueKey: ${error?.message}")
-                    }
-                }
-            }
-        }.start()
-    }
-    
-    /**
-     * Get user-friendly error message based on exception type.
-     */
-    private fun getErrorMessage(error: Throwable?): String {
-        val host = (error as? java.net.UnknownHostException)?.message ?: "unknown"
-        return when (error) {
-            is java.net.UnknownHostException -> MyBundle.message("error.unknown.host", host)
-            is java.net.ConnectException -> MyBundle.message("error.connect")
-            is javax.net.ssl.SSLException -> MyBundle.message("error.ssl")
-            is java.net.SocketTimeoutException -> MyBundle.message("error.timeout")
-            is IllegalStateException -> MyBundle.message("error.config", error.message ?:"")
-            else -> MyBundle.message("error.general", error?.message ?: "Unknown error")
-        }
-    }
-    
-    /**
-     * Get error dialog title based on exception type.
-     */
-    private fun getErrorTitle(error: Throwable?): String {
-        return when (error) {
-            is java.net.UnknownHostException -> MyBundle.message("error.unknown.host.title")
-            is java.net.ConnectException -> MyBundle.message("error.connect.title")
-            is javax.net.ssl.SSLException -> MyBundle.message("error.ssl.title")
-            is java.net.SocketTimeoutException -> MyBundle.message("error.timeout.title")
-            is IllegalStateException -> MyBundle.message("error.config.title")
-            else -> MyBundle.message("error.general.title")
-        }
-    }
-    
-    /**
-     * Helper to get the current branch name.
-     */
-    private fun getCurrentBranchName(): String? {
-        val repoManager = GitRepositoryManager.getInstance(project)
-        // Try to get repository for the project base path to be deterministic
-        val projectRoot = project.basePath?.let { com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByPath(it) }
-        val repository = projectRoot?.let { repoManager.getRepositoryForFile(it) }
-        
-        return repository?.let {
-            com.github.artusm.jetbrainspluginjiraworklog.git.GitUtils.getBranchNameOrRev(it)
-        }
-    }
-
-    /**
-     * Save selected issue for current branch
-     */
-    private fun saveSelectedIssueForCurrentBranch(issueKey: String) {
-        // Always update the global fallback (works for non-Git projects too)
-        persistentState.setLastIssueKey(issueKey)
-
-        // Try to save per-branch if Git repo exists
-        getCurrentBranchName()?.let { branchName ->
-            persistentState.saveIssueForBranch(branchName, issueKey)
-        }
-    }
-    
-    /**
-     * Get saved issue for current branch (with fallback to last issue)
-     */
-    private fun getSavedIssueForCurrentBranch(): String? {
-        val branchName = getCurrentBranchName()
-        return branchName?.let { persistentState.getIssueForBranch(it) } ?: persistentState.getLastIssueKey()
-    }
-    
-    private fun submitWorklog() {
-        val selectedIssue = taskComboBox.selectedItem as? JiraIssue
-        
-        if (selectedIssue == null) {
-            Messages.showErrorDialog(
-                project, 
-                MyBundle.message("commit.error.no.issue"), 
-                MyBundle.message("commit.error.no.issue.title")
-            )
-            return
-        }
-        
-        val timeSpentSeconds = (currentTimeMs / 1000).toInt()
-        if (timeSpentSeconds <= 0) {
-            Messages.showErrorDialog(
-                project, 
-                MyBundle.message("commit.error.invalid.time"), 
-                MyBundle.message("commit.error.invalid.time.title")
-            )
-            return
-        }
-        
-        val comment = commentArea.text.trim()
-        
-        // Submit worklog in background
-        Thread {
-            val result = jiraClient.submitWorklog(selectedIssue.key, timeSpentSeconds, comment.ifBlank { null })
-            
-            SwingUtilities.invokeLater {
-                if (!project.isDisposed) {
-                    if (result.isSuccess) {
-                        Messages.showInfoMessage(
-                            project,
-                            MyBundle.message("commit.success", TimeFormatter.formatJira(currentTimeMs), selectedIssue.key),
-                            MyBundle.message("commit.success.title")
-                        )
-                        
-                        // Reset timer
-                        timerService.reset()
-                        
-                        // Close popup
-                        popup?.cancel()
-                    } else {
-                        Messages.showErrorDialog(
-                            project,
-                            MyBundle.message("commit.error.submit", result.exceptionOrNull()?.message ?: ""),
-                            MyBundle.message("commit.error.submit.title")
-                        )
-                    }
-                }
-            }
-        }.start()
+    override fun removeNotify() {
+        super.removeNotify()
+        uiScope.cancel() // Cancel coroutines when view is removed
+        viewModel.dispose()
     }
     
     override fun getPreferredSize(): Dimension {

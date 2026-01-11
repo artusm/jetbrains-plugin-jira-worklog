@@ -2,75 +2,60 @@ package com.github.artusm.jetbrainspluginjiraworklog.listeners
 
 import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
+import com.intellij.openapi.application.ApplicationActivationListener
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
-import com.intellij.openapi.project.ProjectManagerListener
-import com.intellij.openapi.application.ApplicationActivationListener
 import com.intellij.openapi.wm.IdeFrame
 
 /**
- * Listens for IDE window activation/deactivation and project switches.
- * Handles auto-pause for both window focus loss and project switching.
+ * Listens for IDE window activation and deactivation events to manage timer auto-pause/resume.
+ * Handles three scenarios:
+ * 1. Window Focus Loss: Pauses all running timers (if configured).
+ * 2. Window Focus Gain: Resumes timer for the newly active project (if configured).
+ * 3. Project Switch: Pauses the timer of the previously active project (if configured).
  */
-class WindowFocusListener : ApplicationActivationListener, ProjectManagerListener {
-    
-    private var lastActiveProject: Project? = null
-    
+class WindowFocusListener : ApplicationActivationListener {
+
+    private var lastActiveProjectRef: java.lang.ref.WeakReference<Project>? = null
+
     override fun applicationDeactivated(ideFrame: IdeFrame) {
         val settings = JiraSettings.getInstance()
-        
-        // Handle window focus loss auto-pause
         if (settings.isPauseOnFocusLoss()) {
-            forEachOpenProject { timerService ->
-                timerService.autoPauseByFocus()
-            }
+            pauseAllTimers()
         }
     }
-    
+
     override fun applicationActivated(ideFrame: IdeFrame) {
+        val currentProject = ideFrame.project ?: return
         val settings = JiraSettings.getInstance()
-        val currentProject = ideFrame.project
-        
-        // Handle project switch auto-pause
-        if (settings.isPauseOnProjectSwitch() && currentProject != null) {
-            val previousProject = lastActiveProject
-            
-            // If switching to a different project, pause the previous one
-            if (previousProject != null && 
-                previousProject != currentProject && 
-                !previousProject.isDisposed) {
-                
-                val timerService = previousProject.getService(JiraWorklogTimerService::class.java)
-                timerService?.autoPauseByProjectSwitch()
-            }
-            
-            lastActiveProject = currentProject
-        }
-        
-        // Handle window focus gain auto-resume (only for current project)
-        if (settings.isPauseOnFocusLoss() && currentProject != null && !currentProject.isDisposed) {
-            val timerService = currentProject.getService(JiraWorklogTimerService::class.java)
-            timerService?.autoResumeFromFocus()
-        }
+
+        handleProjectSwitch(currentProject, settings)
+        handleFocusGain(currentProject, settings)
+
+        lastActiveProjectRef = java.lang.ref.WeakReference(currentProject)
     }
-    
-    override fun projectClosed(project: Project) {
-        // Clear tracking if the closed project was the last active one
-        if (lastActiveProject == project) {
-            lastActiveProject = null
-        }
-    }
-    
-    /**
-     * Helper function to execute an action on all open projects' timer services.
-     */
-    private fun forEachOpenProject(action: (JiraWorklogTimerService) -> Unit) {
-        val projectManager = ProjectManager.getInstance()
-        projectManager.openProjects.forEach { project ->
+
+    private fun pauseAllTimers() {
+        ProjectManager.getInstance().openProjects.forEach { project ->
             if (!project.isDisposed) {
-                val timerService = project.getService(JiraWorklogTimerService::class.java)
-                timerService?.let(action)
+                project.service<JiraWorklogTimerService>().autoPauseByFocus()
             }
+        }
+    }
+
+    private fun handleProjectSwitch(currentProject: Project, settings: JiraSettings) {
+        if (!settings.isPauseOnProjectSwitch()) return
+
+        val previousProject = lastActiveProjectRef?.get()
+        if (previousProject != null && previousProject != currentProject && !previousProject.isDisposed) {
+            previousProject.service<JiraWorklogTimerService>().autoPauseByProjectSwitch()
+        }
+    }
+
+    private fun handleFocusGain(currentProject: Project, settings: JiraSettings) {
+        if (settings.isPauseOnFocusLoss() && !currentProject.isDisposed) {
+            currentProject.service<JiraWorklogTimerService>().autoResumeFromFocus()
         }
     }
 }

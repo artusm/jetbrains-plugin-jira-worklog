@@ -5,6 +5,7 @@ import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraApiClient
 import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
+import com.intellij.openapi.components.service
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
@@ -17,6 +18,7 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import kotlinx.coroutines.launch
 import java.awt.*
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
@@ -339,7 +341,27 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
                 indicator.isIndeterminate = true
                 
                 val client = JiraApiClient(settings)
-                result = client.testConnection()
+                val service = project.service<com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService>()
+                
+                // Launch network operation in proper scope
+                val job = service.launch {
+                    result = client.testConnection()
+                }
+                
+                // Wait for completion while checking cancellation
+                while (job.isActive) {
+                    try {
+                        Thread.sleep(50)
+                    } catch (e: InterruptedException) {
+                        job.cancel()
+                        throw com.intellij.openapi.progress.ProcessCanceledException()
+                    }
+                    
+                    if (indicator.isCanceled) {
+                        job.cancel()
+                        throw com.intellij.openapi.progress.ProcessCanceledException()
+                    }
+                }
             }
             
             override fun onSuccess() {
@@ -372,7 +394,11 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
             }
             
             override fun onThrowable(error: Throwable) {
-                showFeedback(MyBundle.message("onboarding.error.unexpected", error.message ?: ""), true)
+                if (error is com.intellij.openapi.progress.ProcessCanceledException) {
+                    showFeedback(MyBundle.message("onboarding.cancelled"), true)
+                } else {
+                    showFeedback(MyBundle.message("onboarding.error.unexpected", error.message ?: ""), true)
+                }
             }
         })
     }

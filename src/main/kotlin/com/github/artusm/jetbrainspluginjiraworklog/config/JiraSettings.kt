@@ -6,6 +6,15 @@ import com.intellij.ide.passwordSafe.PasswordSafe
 import com.intellij.openapi.components.*
 
 /**
+ * Configuration interface for Jira integration.
+ * Allows decoupling settings storage from API usage, enabling safe testing with temporary credentials.
+ */
+interface JiraConfig {
+    fun getJiraUrl(): String
+    fun getPersonalAccessToken(): String?
+}
+
+/**
  * Application-level settings for Jira integration and auto-pause configuration.
  */
 @Service(Service.Level.APP)
@@ -13,7 +22,7 @@ import com.intellij.openapi.components.*
     name = "JiraSettings",
     storages = [Storage("jiraWorklogSettings.xml")]
 )
-class JiraSettings : PersistentStateComponent<JiraSettings.State> {
+class JiraSettings : PersistentStateComponent<JiraSettings.State>, JiraConfig {
     
     private var state = State()
     
@@ -47,14 +56,14 @@ class JiraSettings : PersistentStateComponent<JiraSettings.State> {
     }
     
     // Jira URL
-    fun getJiraUrl(): String = state.jiraUrl
+    override fun getJiraUrl(): String = state.jiraUrl
     
     fun setJiraUrl(url: String) {
         state.jiraUrl = url.trim().trimEnd('/')
     }
     
     // Personal Access Token (stored securely)
-    fun getPersonalAccessToken(): String? {
+    override fun getPersonalAccessToken(): String? {
         val credentialAttributes = createCredentialAttributes(CREDENTIAL_KEY)
         return PasswordSafe.instance.getPassword(credentialAttributes)
     }
