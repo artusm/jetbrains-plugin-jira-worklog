@@ -102,7 +102,8 @@ class JiraApiClient(private val settings: JiraConfig) : JiraApi {
     override suspend fun submitWorklog(
         issueKey: String,
         timeSpentSeconds: Int,
-        comment: String?
+        comment: String?,
+        started: String?
     ): Result<JiraWorklogResponse> = withContext(Dispatchers.IO) {
         val baseUrl = settings.getJiraUrl()
         if (baseUrl.isBlank()) {
@@ -117,13 +118,13 @@ class JiraApiClient(private val settings: JiraConfig) : JiraApi {
         // Convert seconds to Jira time format
         val timeSpent = TimeFormatter.formatJira(timeSpentSeconds * 1000L)
         
-        // Use current time as worklog start time
-        val started = ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+        // Use provided time or current time as worklog start time
+        val startTime = started ?: ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
         
         val request = JiraWorklogRequest(
             timeSpent = timeSpent,
             comment = comment,
-            started = started
+            started = startTime
         )
         
         val url = "$baseUrl/rest/api/2/issue/$issueKey/worklog"

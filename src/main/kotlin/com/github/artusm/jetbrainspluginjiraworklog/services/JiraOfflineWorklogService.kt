@@ -5,6 +5,7 @@ import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraApiClient
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraWorklogResponse
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
@@ -19,7 +20,7 @@ import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLHandshakeException
 
 @Service(Service.Level.PROJECT)
-class JiraOfflineWorklogService(private val project: Project) {
+class JiraOfflineWorklogService(private val project: Project) : Disposable {
 
     companion object {
         private val LOG = Logger.getInstance(JiraOfflineWorklogService::class.java)
@@ -65,7 +66,7 @@ class JiraOfflineWorklogService(private val project: Project) {
         // BUT if `JiraApiClient.submitWorklog` became suspend, then `JiraOfflineWorklogService` (which calls it) must also be suspend or launch a coroutine.
         // The error `e: .../JiraOfflineWorklogService.kt:50:33` suggests the call TO `jiraClient.submitWorklog` failed because `jiraClient.submitWorklog` IS suspend, but `JiraOfflineWorklogService.submitWorklog` WAS NOT.
 
-        val result = jiraClient.submitWorklog(issueKey, timeSpentSeconds, comment)
+        val result = jiraClient.submitWorklog(issueKey, timeSpentSeconds, comment, started)
 
         if (result.isSuccess) {
             return Result.success(result.getOrNull())
@@ -156,7 +157,7 @@ class JiraOfflineWorklogService(private val project: Project) {
             var successCount = 0
 
             for (worklog in pending) {
-                val result = jiraClient.submitWorklog(worklog.issueKey, worklog.timeSpentSeconds, worklog.comment)
+                val result = jiraClient.submitWorklog(worklog.issueKey, worklog.timeSpentSeconds, worklog.comment, worklog.started)
 
                 if (result.isSuccess) {
                     toRemove.add(worklog)
@@ -187,7 +188,7 @@ class JiraOfflineWorklogService(private val project: Project) {
             .notify(project)
     }
 
-    fun dispose() {
+    override fun dispose() {
         retryFuture?.cancel(false)
     }
 }
