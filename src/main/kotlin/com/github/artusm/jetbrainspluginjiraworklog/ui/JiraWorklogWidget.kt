@@ -37,6 +37,7 @@ class JiraWorklogWidget(
         private val START_ICON: Icon = AllIcons.Actions.Resume
         private val STOP_ICON: Icon = AllIcons.Actions.Pause
         private val COMMIT_ICON: Icon = AllIcons.Actions.Commit
+        private val PENDING_ICON: Icon = AllIcons.Actions.Upload
         
         private val WIDGET_FONT = JBUI.Fonts.label(11f)
         
@@ -84,23 +85,57 @@ class JiraWorklogWidget(
         val insets = getInsets()
         val totalBarLength = width - insets.left - insets.right
         
-        // Divide the widget into three sections
-        val sectionWidth = totalBarLength / 3
+        // Check if we have pending worklogs
+        val persistentState = com.intellij.openapi.components.service<com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState>()
+        val hasPending = persistentState.getPendingWorklogs().isNotEmpty()
+
+        // Divide the widget into sections (4 if pending, 3 otherwise)
+        val numSections = if (hasPending) 4 else 3
+        val sectionWidth = totalBarLength / numSections
         val clickX = e.x - insets.left
         
-        when {
-            clickX <= sectionWidth -> {
-                // Left section: Start/Stop
-                service.toggleRunning()
+        // Determine which section was clicked
+        val sectionIndex = (clickX / sectionWidth).toInt().coerceAtMost(numSections - 1)
+
+        if (hasPending) {
+            when (sectionIndex) {
+                0 -> service.toggleRunning() // Start/Stop
+                1 -> showCommitDialog()      // Commit
+                2 -> showPendingPopup()      // Pending
+                else -> showSettings()       // Settings
             }
-            clickX <= sectionWidth * 2 -> {
-                // Middle section: Commit
-                showCommitDialog()
+        } else {
+            when (sectionIndex) {
+                0 -> service.toggleRunning()
+                1 -> showCommitDialog()
+                else -> showSettings()
             }
-            else -> {
-                // Right section: Settings
-                showSettings()
-            }
+        }
+    }
+
+    private fun showPendingPopup() {
+        ApplicationManager.getApplication().invokeLater {
+            val content = PendingWorklogsPopupContent(project)
+
+            val popupBuilder = JBPopupFactory.getInstance().createComponentPopupBuilder(content, null)
+            popupBuilder.setCancelOnClickOutside(true)
+            popupBuilder.setFocusable(true)
+            popupBuilder.setRequestFocus(true)
+            popupBuilder.setShowBorder(true)
+            popupBuilder.setShowShadow(true)
+
+            val popup = popupBuilder.createPopup()
+            content.popup = popup
+
+            // Position popup above the widget, aligned to the right
+            val visibleRect = this.visibleRect
+            val preferredSize = content.preferredSize
+            val point = RelativePoint(
+                this,
+                Point(visibleRect.x + visibleRect.width - preferredSize.width,
+                      visibleRect.y - (preferredSize.height + 15))
+            )
+            popup.show(point)
         }
     }
 
@@ -182,15 +217,20 @@ class JiraWorklogWidget(
         UISettings.setupAntialiasing(g)
 
         if (mouseInside) {
-            // Draw icons in three sections
-            val sectionWidth = totalBarLength / 3
+            val persistentState = com.intellij.openapi.components.service<com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState>()
+            val hasPending = persistentState.getPendingWorklogs().isNotEmpty()
+            val numSections = if (hasPending) 4 else 3
+
+            // Draw icons in sections
+            val sectionWidth = totalBarLength / numSections
             
             // Draw dividers
             g.color = JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground()
-            g.drawLine(xOffset + sectionWidth, yOffset, xOffset + sectionWidth, yOffset + barHeight)
-            g.drawLine(xOffset + sectionWidth * 2, yOffset, xOffset + sectionWidth * 2, yOffset + barHeight)
+            for (i in 1 until numSections) {
+                g.drawLine(xOffset + sectionWidth * i, yOffset, xOffset + sectionWidth * i, yOffset + barHeight)
+            }
             
-            // First icon: Start/Stop
+            // 1. Start/Stop
             val firstIcon = if (status == TimeTrackingStatus.RUNNING) STOP_ICON else START_ICON
             firstIcon.paintIcon(
                 this, g,
@@ -198,19 +238,35 @@ class JiraWorklogWidget(
                 yOffset + (barHeight - firstIcon.iconHeight) / 2
             )
             
-            // Second icon: Commit
+            // 2. Commit
             COMMIT_ICON.paintIcon(
                 this, g,
                 xOffset + sectionWidth + (sectionWidth - COMMIT_ICON.iconWidth) / 2,
                 yOffset + (barHeight - COMMIT_ICON.iconHeight) / 2
             )
             
-            // Third icon: Settings
-            SETTINGS_ICON.paintIcon(
-                this, g,
-                xOffset + sectionWidth * 2 + (sectionWidth - SETTINGS_ICON.iconWidth) / 2,
-                yOffset + (barHeight - SETTINGS_ICON.iconHeight) / 2
-            )
+            if (hasPending) {
+                // 3. Pending
+                PENDING_ICON.paintIcon(
+                    this, g,
+                    xOffset + sectionWidth * 2 + (sectionWidth - PENDING_ICON.iconWidth) / 2,
+                    yOffset + (barHeight - PENDING_ICON.iconHeight) / 2
+                )
+
+                // 4. Settings
+                SETTINGS_ICON.paintIcon(
+                    this, g,
+                    xOffset + sectionWidth * 3 + (sectionWidth - SETTINGS_ICON.iconWidth) / 2,
+                    yOffset + (barHeight - SETTINGS_ICON.iconHeight) / 2
+                )
+            } else {
+                // 3. Settings
+                SETTINGS_ICON.paintIcon(
+                    this, g,
+                    xOffset + sectionWidth * 2 + (sectionWidth - SETTINGS_ICON.iconWidth) / 2,
+                    yOffset + (barHeight - SETTINGS_ICON.iconHeight) / 2
+                )
+            }
         } else {
             // Draw time text
             val fg = if (model.isPressed) {

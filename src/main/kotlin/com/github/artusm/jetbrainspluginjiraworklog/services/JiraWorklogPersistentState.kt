@@ -29,7 +29,19 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
         
         // Branch → Jira Issue Key mapping
         @field:com.intellij.util.xmlb.annotations.MapAnnotation(entryTagName = "branch-mapping", keyAttributeName = "branch", valueAttributeName = "issue")
-        var branchToIssueMap: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
+        var branchToIssueMap: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap(),
+
+        // Offline queue
+        @field:com.intellij.util.xmlb.annotations.XCollection(elementName = "pending-worklog")
+        var pendingWorklogs: MutableList<PendingWorklog> = java.util.ArrayList()
+    )
+
+    data class PendingWorklog(
+        var issueKey: String = "",
+        var timeSpentSeconds: Int = 0,
+        var comment: String? = null,
+        var started: String = "", // ISO 8601 string
+        var timestamp: Long = 0L
     )
 
     override fun getState(): State = state
@@ -112,6 +124,21 @@ class JiraWorklogPersistentState : PersistentStateComponent<JiraWorklogPersisten
                 iterator.remove()
             }
         }
+    }
+
+    @Synchronized
+    fun addPendingWorklog(worklog: PendingWorklog) {
+        state.pendingWorklogs.add(worklog)
+    }
+
+    @Synchronized
+    fun removePendingWorklog(worklog: PendingWorklog) {
+        state.pendingWorklogs.remove(worklog)
+    }
+
+    @Synchronized
+    fun getPendingWorklogs(): List<PendingWorklog> {
+        return java.util.ArrayList(state.pendingWorklogs)
     }
     
     fun reset() {

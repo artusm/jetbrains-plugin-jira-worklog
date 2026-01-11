@@ -12,6 +12,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <!-- Services -->
         <projectService serviceImplementation="com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService"/>
+        <projectService serviceImplementation="com.github.artusm.jetbrainspluginjiraworklog.services.JiraOfflineWorklogService"/>
         <applicationService serviceImplementation="com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings"/>
         <applicationService serviceImplementation="com.github.artusm.jetbrainspluginjiraworklog.git.GitBranchParser"/>
         

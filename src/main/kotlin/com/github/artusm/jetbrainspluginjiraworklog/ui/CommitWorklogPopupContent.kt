@@ -4,10 +4,13 @@ import com.github.artusm.jetbrainspluginjiraworklog.config.JiraSettings
 import com.github.artusm.jetbrainspluginjiraworklog.git.GitBranchParser
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraApiClient
 import com.github.artusm.jetbrainspluginjiraworklog.jira.JiraIssue
+import com.github.artusm.jetbrainspluginjiraworklog.services.JiraOfflineWorklogService
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogPersistentState
 import com.github.artusm.jetbrainspluginjiraworklog.services.JiraWorklogTimerService
 import com.github.artusm.jetbrainspluginjiraworklog.utils.MyBundle
 import com.github.artusm.jetbrainspluginjiraworklog.utils.TimeFormatter
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
@@ -34,6 +37,7 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
     private val settings = JiraSettings.getInstance()
     private val timerService = project.service<JiraWorklogTimerService>()
     private val persistentState = project.service<JiraWorklogPersistentState>()
+    private val offlineService = project.service<JiraOfflineWorklogService>()
     private val gitBranchParser = service<GitBranchParser>()
     private val jiraClient = JiraApiClient(settings)
     
@@ -369,7 +373,8 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
         
         // Submit worklog in background
         Thread {
-            val result = jiraClient.submitWorklog(selectedIssue.key, timeSpentSeconds, comment.ifBlank { null })
+            val started = ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            val result = offlineService.submitWorklog(selectedIssue.key, timeSpentSeconds, comment.ifBlank { null }, started)
             
             SwingUtilities.invokeLater {
                 if (!project.isDisposed) {
@@ -379,18 +384,28 @@ class CommitWorklogPopupContent(private val project: Project) : JPanel(BorderLay
                             MyBundle.message("commit.success", TimeFormatter.formatJira(currentTimeMs), selectedIssue.key),
                             MyBundle.message("commit.success.title")
                         )
-                        
-                        // Reset timer
                         timerService.reset()
-                        
-                        // Close popup
                         popup?.cancel()
                     } else {
-                        Messages.showErrorDialog(
-                            project,
-                            MyBundle.message("commit.error.submit", result.exceptionOrNull()?.message ?: ""),
-                            MyBundle.message("commit.error.submit.title")
-                        )
+                        val error = result.exceptionOrNull()
+                        if (error?.message == "OFFLINE_QUEUED") {
+                            Messages.showInfoMessage(
+                                project,
+                                "Worklog queued for offline submission. It will be sent automatically when connection is restored.", // TODO: Localize
+                                "Worklog Queued"
+                            )
+                            timerService.reset()
+                            popup?.cancel()
+
+                            // Update widget to show queue status
+                            timerService.widget().repaint()
+                        } else {
+                            Messages.showErrorDialog(
+                                project,
+                                MyBundle.message("commit.error.submit", error?.message ?: ""),
+                                MyBundle.message("commit.error.submit.title")
+                            )
+                        }
                     }
                 }
             }
