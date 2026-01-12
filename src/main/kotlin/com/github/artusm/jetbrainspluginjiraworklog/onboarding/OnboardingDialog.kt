@@ -255,12 +255,12 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
             when {
                 !parsedUrl.protocol.equals("https", ignoreCase = true) -> {
                     urlValidationLabel.icon = AllIcons.General.Warning
-                    urlValidationLabel.foreground = NamedColorUtil.getWarningForeground()
+                    urlValidationLabel.foreground = JBColor.ORANGE
                     urlValidationLabel.toolTipText = MyBundle.message("validation.url.https.warning")
                 }
                 !url.contains("atlassian.net") && !url.contains("jira") -> {
                     urlValidationLabel.icon = AllIcons.General.Warning
-                    urlValidationLabel.foreground = NamedColorUtil.getWarningForeground()
+                    urlValidationLabel.foreground = JBColor.ORANGE
                     urlValidationLabel.toolTipText = MyBundle.message("validation.url.format.warning")
                 }
                 else -> {
