@@ -7,13 +7,13 @@ import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
-import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.components.BrowserLink
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.NamedColorUtil
 import com.intellij.util.ui.UIUtil
 import kotlinx.coroutines.runBlocking
 import java.awt.*
@@ -257,6 +257,10 @@ class JiraWorklogConfigurable : Configurable {
             success -> AllIcons.General.InspectionsOK
             else -> AllIcons.General.Error
         }
-        connectionStatusLabel.foreground = if (success && !isProcessing) JBColor(Color(0, 128, 0), Color(0, 200, 0)) else if (isProcessing) UIUtil.getLabelForeground() else JBColor.RED
+        connectionStatusLabel.foreground = when {
+            isProcessing -> UIUtil.getLabelForeground()
+            success -> UIUtil.getToolTipForeground()
+            else -> NamedColorUtil.getErrorForeground()
+        }
     }
 }
