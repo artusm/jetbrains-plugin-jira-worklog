@@ -17,6 +17,7 @@ import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.NamedColorUtil
 import com.intellij.util.ui.UIUtil
 import kotlinx.coroutines.launch
 import java.awt.*
@@ -210,8 +211,7 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
     
     private fun createInfoPanel(): JPanel {
         val infoPanel = JPanel(BorderLayout(JBUI.scale(12), 0))
-        // Light theme: 0xEBF5FF, Dark theme: 0x2D3748
-        infoPanel.background = JBColor(0xEBF5FF, 0x2D3748)
+        infoPanel.background = JBUI.CurrentTheme.Banner.INFO_BACKGROUND
         infoPanel.border = JBUI.Borders.empty(12)
         infoPanel.alignmentX = Component.LEFT_ALIGNMENT
         
@@ -265,13 +265,13 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
                 }
                 else -> {
                     urlValidationLabel.icon = AllIcons.General.InspectionsOK
-                    urlValidationLabel.foreground = JBColor.GREEN
+                    urlValidationLabel.foreground = UIUtil.getToolTipForeground()
                     urlValidationLabel.toolTipText = MyBundle.message("validation.url.format.ok")
                 }
             }
         } catch (e: Exception) {
             urlValidationLabel.icon = AllIcons.General.Error
-            urlValidationLabel.foreground = JBColor.RED
+            urlValidationLabel.foreground = NamedColorUtil.getErrorForeground()
             urlValidationLabel.toolTipText = MyBundle.message("validation.url.invalid")
         }
     }
@@ -281,11 +281,9 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
         feedbackPanel.layout = BorderLayout(JBUI.scale(8), 0)
 
         feedbackPanel.background = if (isError) {
-            // Error bg: Light 0xFFF5F5, Dark 0x5C2626
-            JBColor(0xFFF5F5, 0x5C2626)
+            JBUI.CurrentTheme.Banner.ERROR_BACKGROUND
         } else {
-            // Success bg: Light 0xF0FFF4, Dark 0x1E4620
-            JBColor(0xF0FFF4, 0x1E4620)
+            JBUI.CurrentTheme.Banner.SUCCESS_BACKGROUND
         }
 
         feedbackPanel.border = JBUI.Borders.empty(12)
@@ -294,7 +292,7 @@ class OnboardingDialog(private val project: Project) : DialogWrapper(project) {
         feedbackPanel.add(JBLabel(icon), BorderLayout.WEST)
         
         val textLabel = JBLabel("<html>$message</html>")
-        textLabel.foreground = if (isError) JBColor.RED else JBColor.GREEN
+        textLabel.foreground = if (isError) NamedColorUtil.getErrorForeground() else UIUtil.getToolTipForeground()
         feedbackPanel.add(textLabel, BorderLayout.CENTER)
         
         feedbackPanel.isVisible = true
